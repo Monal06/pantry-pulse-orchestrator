@@ -1,0 +1,188 @@
+import { useState } from "react";
+import {
+  Box, Typography, Card, CardContent, Button, Chip, CircularProgress,
+  Snackbar, Alert, Stack,
+} from "@mui/material";
+import { Restaurant, CalendarMonth, Favorite, FavoriteBorder } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
+import { getMealSuggestions, recordCookedMeal, saveRecipe } from "../api";
+
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: "#F44336",
+  use_soon: "#FF9800",
+  normal: "#4CAF50",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  critical: "Uses critical items",
+  use_soon: "Uses items expiring soon",
+  normal: "Regular recipe",
+};
+
+export default function MealsPage() {
+  const navigate = useNavigate();
+  const [meals, setMeals] = useState<any[]>([]);
+  const [tips, setTips] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState("");
+
+  const loadSuggestions = async () => {
+    setLoading(true);
+    try {
+      const data = await getMealSuggestions(3);
+      setMeals(data.meals || []);
+      setTips(data.waste_prevention_tips || []);
+      setSummary(data.inventory_summary || null);
+    } catch (e: any) {
+      setSnackbar(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (meal: any) => {
+    try {
+      await saveRecipe({
+        name: meal.name,
+        description: meal.description || "",
+        ingredients: meal.ingredients_used || [],
+        instructions: meal.instructions || [],
+        prep_time_minutes: meal.prep_time_minutes || 30,
+      });
+      setSnackbar(`"${meal.name}" saved to your recipes!`);
+    } catch (e: any) {
+      setSnackbar(e.message);
+    }
+  };
+
+  const handleCooked = async (meal: any) => {
+    try {
+      const result = await recordCookedMeal(meal.name, meal.ingredients_used);
+      const deductedCount = result.deducted_from_inventory?.length ?? 0;
+      setSnackbar(
+        `"${meal.name}" cooked! ${deductedCount} ingredient${deductedCount !== 1 ? "s" : ""} deducted from pantry.`
+      );
+    } catch (e: any) {
+      setSnackbar(e.message);
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="h5" fontWeight={800} sx={{ mb: 2 }}>Meal Suggestions</Typography>
+
+      {summary && (
+        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+          {summary.critical_items > 0 && (
+            <Chip label={`${summary.critical_items} critical`} sx={{ bgcolor: "#FFEBEE" }} />
+          )}
+          {summary.use_soon_items > 0 && (
+            <Chip label={`${summary.use_soon_items} use soon`} sx={{ bgcolor: "#FFF3E0" }} />
+          )}
+          <Chip label={`${summary.total_items} total items`} />
+        </Stack>
+      )}
+
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <Button variant="outlined" startIcon={<CalendarMonth />} onClick={() => navigate("/weekly-plan")}>
+          Weekly Plan
+        </Button>
+        <Button variant="outlined" startIcon={<Favorite />} onClick={() => navigate("/recipes")}>
+          Saved Recipes
+        </Button>
+      </Stack>
+
+      <Button
+        variant="contained"
+        startIcon={<Restaurant />}
+        onClick={loadSuggestions}
+        disabled={loading}
+        size="large"
+        sx={{ mb: 3 }}
+      >
+        {meals.length ? "Refresh Suggestions" : "Get Today's Meals"}
+      </Button>
+
+      {loading && !meals.length && (
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <CircularProgress />
+          <Typography color="text.secondary" sx={{ mt: 2 }}>Crafting meals from your inventory...</Typography>
+        </Box>
+      )}
+
+      {meals.map((meal, index) => (
+        <Card
+          key={index}
+          sx={{
+            mb: 2,
+            borderLeft: `4px solid ${PRIORITY_COLORS[meal.freshness_priority] || "#4CAF50"}`,
+          }}
+        >
+          <CardContent>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+              <Typography variant="h6" fontWeight={700}>{meal.name}</Typography>
+              <Chip label={`${meal.prep_time_minutes} min`} size="small" icon={<Restaurant />} />
+            </Box>
+
+            <Typography color="text.secondary" sx={{ mb: 1 }}>{meal.description}</Typography>
+
+            <Chip
+              label={PRIORITY_LABELS[meal.freshness_priority] || "Recipe"}
+              size="small"
+              sx={{
+                bgcolor: (PRIORITY_COLORS[meal.freshness_priority] || "#4CAF50") + "20",
+                mb: 2,
+              }}
+            />
+
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+              Ingredients from your pantry:
+            </Typography>
+            <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap sx={{ mb: 1 }}>
+              {meal.ingredients_used?.map((ing: string, i: number) => (
+                <Chip key={i} label={ing} size="small" sx={{ bgcolor: "#E8F5E9" }} />
+              ))}
+            </Stack>
+
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 1, mb: 0.5 }}>Instructions:</Typography>
+            {meal.instructions?.map((step: string, i: number) => (
+              <Typography key={i} variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                {i + 1}. {step}
+              </Typography>
+            ))}
+
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+              <Button variant="outlined" startIcon={<Restaurant />} onClick={() => handleCooked(meal)}>
+                I Cooked This
+              </Button>
+              <Button variant="outlined" startIcon={<FavoriteBorder />} onClick={() => handleSave(meal)}>
+                Save Recipe
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      ))}
+
+      {tips.length > 0 && (
+        <Card sx={{ bgcolor: "#FFF8E1" }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#E65100", mb: 1 }}>
+              Waste Prevention Tips
+            </Typography>
+            {tips.map((tip: any, i: number) => (
+              <Box key={i} sx={{ mb: 1 }}>
+                <Typography fontWeight={600}>{tip.item}:</Typography>
+                <Typography variant="body2">{tip.tip}</Typography>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar("")}>
+        <Alert severity="info" onClose={() => setSnackbar("")}>{snackbar}</Alert>
+      </Snackbar>
+    </Box>
+  );
+}
