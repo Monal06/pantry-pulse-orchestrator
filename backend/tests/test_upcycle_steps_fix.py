@@ -5,7 +5,8 @@ Tests that fallback returns complete step-by-step instructions.
 """
 
 import sys
-sys.path.insert(0, 'backend')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.modules.waste_engine.smart_decision_engine import SmartDecisionEngine
 
