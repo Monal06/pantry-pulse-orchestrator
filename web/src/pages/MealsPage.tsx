@@ -1,11 +1,82 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box, Typography, Card, CardContent, Button, Chip, CircularProgress,
   Snackbar, Alert, Stack,
 } from "@mui/material";
-import { Restaurant, CalendarMonth, Favorite, FavoriteBorder } from "@mui/icons-material";
+import { Restaurant, CalendarMonth, Favorite, FavoriteBorder, AutoAwesome, MonitorHeart } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { getMealSuggestions, recordCookedMeal, saveRecipe } from "../api";
+import { getMealSuggestions, recordCookedMeal, saveRecipe, generateMetabolicPlan, getInventory } from "../api";
+
+class MealsStore {
+  meals: any[] = [];
+  loading = false;
+  error = "";
+  listeners: (() => void)[] = [];
+
+  subscribe(listener: () => void) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  notify() {
+    this.listeners.forEach((l) => l());
+  }
+
+  async generate() {
+    if (this.loading) return;
+    this.loading = true;
+    this.error = "";
+    this.notify();
+
+    try {
+      const liveInventoryData = await getInventory();
+      const realItems = liveInventoryData.map((item: any) => ({
+        name: item.name,
+        freshness_score: item.freshness_score || 100,
+        category: item.category
+      }));
+
+      const payload = {
+        inventory_items: realItems.length > 0 ? realItems : [
+          { name: "Salmon", freshness_score: 15 },
+          { name: "Spinach", freshness_score: 5 },
+          { name: "Brown Rice", freshness_score: 90 }
+        ],
+        biometrics: {
+          heart_rate_bpm: 85, hrv_ms: 30.5, sleep_score_100: 42,
+          steps_today: 12000, readiness_score: 30, stress_level: "high"
+        },
+        profile: {
+          vegetarian: false, vegan: false, gluten_free: false, dairy_free: false,
+          nut_free: false, halal: false, kosher: false, low_carb: false,
+          allergies: [], dislikes: [], cuisine_preferences: [], fitness_goals: ["endurance", "fat loss"], household_size: 1
+        }
+      };
+      
+      const res = await generateMetabolicPlan(payload);
+      
+      this.meals = [{
+        name: res.name,
+        description: res.description,
+        metabolic_justification: res.justification,
+        metabolic_score: res.metabolic_alignment_score,
+        freshness_priority: "critical", 
+        prep_time_minutes: res.prep_time_minutes,
+        ingredients_used: res.ingredients_used,
+        instructions: res.instructions
+      }];
+    } catch (e: any) {
+      this.error = e.message;
+    } finally {
+      this.loading = false;
+      this.notify();
+    }
+  }
+}
+
+const mealsStore = new MealsStore();
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "#F44336",
@@ -21,24 +92,22 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 export default function MealsPage() {
   const navigate = useNavigate();
-  const [meals, setMeals] = useState<any[]>([]);
+  const [meals, setMeals] = useState<any[]>(mealsStore.meals);
+  const [loading, setLoading] = useState(mealsStore.loading);
+  const [snackbar, setSnackbar] = useState("");
   const [tips, setTips] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState("");
+  
+  useEffect(() => {
+    return mealsStore.subscribe(() => {
+      setMeals(mealsStore.meals);
+      setLoading(mealsStore.loading);
+      if (mealsStore.error) setSnackbar(`Generation failed: ${mealsStore.error}`);
+    });
+  }, []);
 
   const loadSuggestions = async () => {
-    setLoading(true);
-    try {
-      const data = await getMealSuggestions(3);
-      setMeals(data.meals || []);
-      setTips(data.waste_prevention_tips || []);
-      setSummary(data.inventory_summary || null);
-    } catch (e: any) {
-      setSnackbar(e.message);
-    } finally {
-      setLoading(false);
-    }
+    mealsStore.generate();
   };
 
   const handleSave = async (meal: any) => {
@@ -93,16 +162,19 @@ export default function MealsPage() {
         </Button>
       </Stack>
 
-      <Button
-        variant="contained"
-        startIcon={<Restaurant />}
-        onClick={loadSuggestions}
-        disabled={loading}
-        size="large"
-        sx={{ mb: 3 }}
-      >
-        {meals.length ? "Refresh Suggestions" : "Get Today's Meals"}
-      </Button>
+      <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+        <Button
+          variant="contained"
+          startIcon={<Restaurant />}
+          onClick={loadSuggestions}
+          disabled={loading}
+          size="large"
+        >
+          {meals.length ? "Refresh Suggestions" : "Get Today's Meals"}
+        </Button>
+      </Stack>
+
+
 
       {loading && !meals.length && (
         <Box sx={{ textAlign: "center", py: 4 }}>
@@ -126,6 +198,29 @@ export default function MealsPage() {
             </Box>
 
             <Typography color="text.secondary" sx={{ mb: 1 }}>{meal.description}</Typography>
+            
+            {meal.metabolic_justification && (
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f0f7ff', borderRadius: 1, border: '1px solid #bbdefb' }}>
+                <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 0.5 }}>
+                   <AutoAwesome color="primary" fontSize="small" />
+                   <Typography variant="subtitle2" fontWeight={700} color="primary.main">
+                     Metabolic Guard Active
+                   </Typography>
+                </Stack>
+                <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                  {meal.metabolic_justification}
+                </Typography>
+                {meal.metabolic_score && (
+                  <Chip
+                    icon={<MonitorHeart sx={{ fontSize: 16 }} />}
+                    label={`Score: ${meal.metabolic_score}/100`}
+                    color="success"
+                    size="small"
+                    sx={{ mt: 1 }}
+                  />
+                )}
+              </Box>
+            )}
 
             <Chip
               label={PRIORITY_LABELS[meal.freshness_priority] || "Recipe"}
