@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -63,9 +64,9 @@ class PantryItemBase(BaseModel):
     unit: str = "item"
     storage: StorageLocation = StorageLocation.FRIDGE
     is_perishable: bool = True
-    barcode: str | None = None
-    notes: str | None = None
-    price: float | None = None
+    barcode: Optional[str] = None
+    notes: Optional[str] = None
+    price: Optional[float] = None
 
 
 class PantryItemCreate(PantryItemBase):
@@ -73,14 +74,14 @@ class PantryItemCreate(PantryItemBase):
 
 
 class PantryItemUpdate(BaseModel):
-    name: str | None = None
-    category: str | None = None
-    quantity: float | None = None
-    unit: str | None = None
-    storage: StorageLocation | None = None
-    is_perishable: bool | None = None
-    notes: str | None = None
-    price: float | None = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    storage: Optional[StorageLocation] = None
+    is_perishable: Optional[bool] = None
+    notes: Optional[str] = None
+    price: Optional[float] = None
 
 
 class PantryItem(PantryItemBase):
@@ -89,7 +90,7 @@ class PantryItem(PantryItemBase):
     added_date: date
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
-    created_at: datetime | None = None
+    created_at: Optional[datetime] = None
 
     @classmethod
     def from_db_row(cls, row: dict) -> PantryItem:
