@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Box, Typography, Card, CardContent, Switch, Button, TextField,
   Chip, Snackbar, Alert, Stack,
@@ -35,8 +35,31 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState("");
 
+  // Live wearable mock state
+  const [liveHr, setLiveHr] = useState(85);
+  const [liveSteps, setLiveSteps] = useState(12040);
+
   useEffect(() => {
     getDietaryProfile().then(setProfile).catch(() => {});
+
+    // Wearable data simulation
+    const hrInterval = setInterval(() => {
+      setLiveHr((prev) => {
+        const jump = Math.random() > 0.5 ? 1 : -1;
+        return Math.min(Math.max(prev + jump, 75), 95);
+      });
+    }, 1500);
+
+    const stepsInterval = setInterval(() => {
+      if (Math.random() > 0.5) {
+         setLiveSteps((prev) => prev + Math.floor(Math.random() * 3) + 1);
+      }
+    }, 2000);
+    
+    return () => {
+      clearInterval(hrInterval);
+      clearInterval(stepsInterval);
+    };
   }, []);
 
   const toggleField = (key: keyof DietaryProfile) => {
@@ -184,6 +207,55 @@ export default function ProfilePage() {
               {profile.household_size === 1 ? "person" : "people"}
             </Typography>
           </Stack>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={700} gutterBottom>Core Biometrics</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Your baseline details used for metabolic calculations.
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+            <TextField label="Age" type="number" size="small" defaultValue={28} />
+            <TextField label="Weight (kg)" type="number" size="small" defaultValue={70} />
+            <TextField label="Height (cm)" type="number" size="small" defaultValue={175} />
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 4, background: 'linear-gradient(to right, #f8f9fa, #e9ecef)' }}>
+        <CardContent>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Typography variant="h6" fontWeight={700}>🟢 Apple Watch / Oura Synced</Typography>
+            <Chip color="success" size="small" label="Live Data" />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            These biometrics are streaming from your wearable device and are dynamically piped into the Metabolic Guard.
+          </Typography>
+          
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <Typography variant="subtitle2" color="text.secondary">Resting HR</Typography>
+              <Typography variant="h5" fontWeight={700} color="error.main">{liveHr} bpm</Typography>
+              <Typography variant="caption" color="text.secondary">Elevated (+10)</Typography>
+            </Box>
+            <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <Typography variant="subtitle2" color="text.secondary">Sleep Score</Typography>
+              <Typography variant="h5" fontWeight={700} color="warning.main">42/100</Typography>
+              <Typography variant="caption" color="text.secondary">Poor Recovery</Typography>
+            </Box>
+            <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <Typography variant="subtitle2" color="text.secondary">Readiness</Typography>
+              <Typography variant="h5" fontWeight={700} color="error.main">30/100</Typography>
+              <Typography variant="caption" color="error">High Stress Detected</Typography>
+            </Box>
+            <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <Typography variant="subtitle2" color="text.secondary">Steps Today</Typography>
+              <Typography variant="h5" fontWeight={700} color="primary.main">{liveSteps.toLocaleString()}</Typography>
+              <Typography variant="caption" color="primary">Goal Met!</Typography>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 

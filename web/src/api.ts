@@ -254,3 +254,11 @@ export async function toggleRecipeFavorite(recipeId: string) {
 export async function deleteRecipe(recipeId: string) {
   return request(`/recipes/${recipeId}`, { method: "DELETE" });
 }
+
+export async function generateMetabolicPlan(payload: any) {
+  return request("/recipes/metabolic/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}

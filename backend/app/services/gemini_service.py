@@ -442,6 +442,65 @@ Return ONLY valid JSON, no markdown fences."""
     text = await _generate_with_retry([types.Part.from_text(text=prompt)])
     return _parse_json_response(text)
 
+async def generate_metabolic_recipe(
+    inventory_items: list[dict],
+    biometrics: dict[str, Any],
+    profile_data: str,
+) -> dict[str, Any]:
+    """
+    Constraint-Driven RAG for recipes based on:
+      1. Inventory freshness constraints.
+      2. Biometric state of the user.
+      3. User profile goals/restrictions.
+    """
+    # Separate inventory by freshness constraint
+    critical_items = [i for i in inventory_items if i.get("freshness_score", 100) < 50]
+    stable_items = [i for i in inventory_items if i.get("freshness_score", 100) >= 50]
+    
+    inv_summary = "CRITICAL (Must Use):\n"
+    for i in critical_items:
+        inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
+    inv_summary += "\nSTABLE (Can Use):\n"
+    for i in stable_items:
+        inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
+
+    prompt = f"""You are the 'Metabolic Guard', an elite constraint-driven cooking AI.
+Your goal is to suggest ONE highly optimized meal recipe that perfectly balances the user's BIOLOGICAL NEEDS with their INVENTORY CONSTRAINTS.
+
+USER PROFILE & DIET GOALS:
+{profile_data}
+
+CURRENT BIOMETRIC STATE:
+{json.dumps(biometrics, indent=2)}
+
+INVENTORY:
+{inv_summary}
+
+RULES:
+1. BIOMETRIC ALIGNMENT: 
+   - If Sleep/Readiness is low or Stress is high, use ingredients rich in recovery nutrients (magnesium, complex carbs, antioxidants).
+   - If Steps are high, provide sufficient protein/carbs for recovery.
+2. CIRCULAR OPTIMIZATION:
+   - You MUST utilize at least some items from the "CRITICAL" inventory list to prevent food waste.
+   - You may use "STABLE" items to round out the nutritional profile.
+3. STRICT DIETARY ADHERENCE: Never violate the user's dietary restrictions or fitness goals.
+
+Return JSON in this EXACT format:
+{{
+  "name": "Recipe Name",
+  "description": "Short description of why this recipe is perfect for their biometric state",
+  "ingredients_used": ["..."],
+  "instructions": ["..."],
+  "prep_time_minutes": 25,
+  "metabolic_alignment_score": 95,
+  "justification": "Detailed explanation of how this targets their specific biometric needs."
+}}
+
+Return ONLY valid JSON, no markdown fences."""
+
+    text = await _generate_with_retry([types.Part.from_text(text=prompt)])
+    return _parse_json_response(text)
+
 
 def _parse_json_response(text: str) -> dict[str, Any]:
     cleaned = text.strip()
