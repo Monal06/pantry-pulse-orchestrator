@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
 from app.models.inventory import PantryItemCreate, SpoilageReport, StorageLocation
 from app.services import gemini_service, barcode_service, inventory_service
-from app.services import ensemble_freshness_service  # used by /freshness-deep only
+from app.services import ensemble_freshness_service, image_crop_service
 from app.routers.meals import _meal_history
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
@@ -54,6 +54,70 @@ async def analyze_fridge_photo(
     items_created = []
     spoilage_reports = result.get("spoilage_reports", [])
 
+    # ------------------------------------------------------------------
+    # Module B: Per-item ensemble freshness on cropped regions.
+    # Gemini returns a bbox [x1,y1,x2,y2] (normalised 0-1) for each item.
+    # We crop that region and run the full ensemble on the close-up crop.
+    # Capped at 6 items concurrently to avoid overloading the CPU.
+    # Items without a valid bbox fall back to Gemini-only scoring.
+    # All existing keys are unaffected — freshness_scores is a NEW key.
+    # ------------------------------------------------------------------
+    perishable_items = [
+        item for item in result.get("items", [])
+        if item.get("is_perishable", True)
+    ]
+
+    async def _ensemble_for_item(raw_item: dict) -> tuple[str, dict | None, dict]:
+        """Crop + ensemble for one item. Returns (item_name, result_or_None, raw_item)."""
+        name = raw_item.get("name", "unknown")
+        bbox = image_crop_service.validate_bbox(raw_item.get("bbox"))
+        crop_bytes = (
+            image_crop_service.crop_item_from_image(image_bytes, bbox)
+            if bbox else None
+        )
+        # Fall back to full image if no bbox
+        scan_bytes = crop_bytes or image_bytes
+        try:
+            res = await ensemble_freshness_service.run_ensemble_analysis(
+                image_bytes=scan_bytes,
+                food_name=name,
+                food_category=raw_item.get("category", "other"),
+                storage=raw_item.get("storage", "fridge"),
+                added_date=date.today(),
+                mime_type=photo.content_type or "image/jpeg",
+            )
+            return name, res, raw_item
+        except Exception as exc:
+            print(f"[FRIDGE-PHOTO] Ensemble failed for {name}: {exc}")
+            return name, None, raw_item
+
+    # Run ensemble on up to 6 perishable items concurrently
+    MAX_ENSEMBLE_ITEMS = 6
+    freshness_scores: dict = {}
+    if perishable_items:
+        import asyncio as _asyncio
+        sem = _asyncio.Semaphore(3)  # max 3 parallel ensemble runs
+
+        async def _guarded(item):
+            async with sem:
+                return await _ensemble_for_item(item)
+
+        tasks = [_guarded(item) for item in perishable_items[:MAX_ENSEMBLE_ITEMS]]
+        ensemble_results = await _asyncio.gather(*tasks, return_exceptions=False)
+
+        for item_name, ens_result, _raw in ensemble_results:
+            if ens_result:
+                freshness_scores[item_name] = {
+                    "freshness_score":  ens_result.get("freshness_score"),
+                    "freshness_level":  ens_result.get("freshness_level"),
+                    "confidence":       ens_result.get("confidence"),
+                    "visual_flags":     ens_result.get("visual_flags", []),
+                    "days_remaining":   ens_result.get("bayesian_prediction", {}).get("predicted_days_remaining"),
+                    "llm_reasoning":    ens_result.get("llm_reasoning"),
+                    "used_crop":        _raw.get("bbox") is not None,
+                }
+                print(f"[FRIDGE-PHOTO] Ensemble {item_name}: score={ens_result.get('freshness_score')}")
+
     if auto_add and "items" in result:
         for raw_item in result["items"]:
             item_name = raw_item.get("name", "Unknown")
@@ -89,6 +153,8 @@ async def analyze_fridge_photo(
         "items_added": items_created,
         "spoilage_reports": spoilage_reports,
         "description": result.get("description", ""),
+        # Per-item ensemble freshness scores (new key — safe to ignore if not needed)
+        "freshness_scores": freshness_scores,
     }
 
 
