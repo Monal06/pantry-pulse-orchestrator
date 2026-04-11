@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
 from app.models.inventory import PantryItemCreate, SpoilageReport, StorageLocation
 from app.services import gemini_service, barcode_service, inventory_service
+from app.services import ensemble_freshness_service  # used by /freshness-deep only
 from app.routers.meals import _meal_history
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
@@ -295,5 +296,76 @@ async def get_nutritional_balance(user_id: str = Query(default=DEFAULT_USER)):
             "recommendations": ["Try again later or manually review your pantry"],
             "error": str(e)
         }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Deep Ensemble Freshness Analysis
+# ---------------------------------------------------------------------------
+
+@router.post("/freshness-deep")
+async def analyze_freshness_deep(
+    photo: UploadFile = File(...),
+    item_name: str = Query(default="unknown food item", description="Name of the food item"),
+    category: str = Query(default="other", description="Food category (dairy, meat, fruit, etc.)"),
+    storage: str = Query(default="fridge", description="Storage location: fridge/freezer/pantry/counter"),
+    purchase_date: str = Query(default="", description="Purchase date ISO string YYYY-MM-DD (optional)"),
+):
+    """
+    Deep multi-method freshness analysis using a 4-signal ensemble.
+
+    Combines four independent AI/CV methods:
+
+    1. **Gemini Visual Assessment** (40% weight) — LLM multimodal spoilage detection
+    2. **CV Pipeline** (25% weight) — OpenCV colour space analysis (HSV+LAB), mold masks,
+       texture quality (Laplacian variance), context-aware for yellow/dark foods
+    3. **ViT Anomaly Detection** (20% weight) — google/vit-base-patch16-224 CLS-token
+       activation statistics; higher anomaly = more spoiled
+    4. **CLIP Zero-Shot** (15% weight) — openai/clip-vit-base-patch32 comparing image
+       against "fresh food" vs "moldy food" text prompts
+
+    Plus:
+    - **Bayesian Decay Model** — combines the ensemble score with the time-based prior
+      (existing linear decay formula) via Gaussian conjugate update
+    - **Groq/Llama 3.3 70B Reasoning** — natural-language safety summary
+    - **Confidence scoring** — agreement between methods, image quality, method count
+    - **Safety hard caps** — mold → score ≤ 25; rot → score ≤ 30
+
+    If ML models (CLIP/ViT) are not installed, they are skipped
+    and their weights redistributed to the remaining methods.
+    """
+    if not photo.content_type or not photo.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    image_bytes = await photo.read()
+    if len(image_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Empty image file")
+
+    # Parse optional purchase date
+    parsed_purchase_date = None
+    if purchase_date:
+        try:
+            from datetime import date as _date
+            parsed_purchase_date = _date.fromisoformat(purchase_date)
+        except (ValueError, TypeError):
+            pass  # Ignore bad date strings — Bayesian prior uses added_date only
+
+    try:
+        result = await ensemble_freshness_service.run_ensemble_analysis(
+            image_bytes=image_bytes,
+            food_name=item_name,
+            food_category=category,
+            storage=storage,
+            added_date=date.today(),
+            purchase_date=parsed_purchase_date,
+            mime_type=photo.content_type or "image/jpeg",
+        )
+    except Exception as e:
+        print(f"[FRESHNESS-DEEP] Fatal error in ensemble: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ensemble freshness analysis failed: {str(e)}",
+        )
 
     return result
