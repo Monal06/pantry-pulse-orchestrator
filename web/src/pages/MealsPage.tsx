@@ -35,7 +35,8 @@ class MealsStore {
       const realItems = liveInventoryData.map((item: any) => ({
         name: item.name,
         freshness_score: item.freshness_score || 100,
-        category: item.category
+        category: item.category,
+        visual_hazard: item.visual_hazard || false
       }));
 
       const payload = {
@@ -57,16 +58,29 @@ class MealsStore {
       
       const res = await generateMetabolicPlan(payload);
       
-      this.meals = [{
-        name: res.name,
-        description: res.description,
-        metabolic_justification: res.justification,
-        metabolic_score: res.metabolic_alignment_score,
-        freshness_priority: "critical", 
-        prep_time_minutes: res.prep_time_minutes,
-        ingredients_used: res.ingredients_used,
-        instructions: res.instructions
-      }];
+      if (res.recipes && Array.isArray(res.recipes)) {
+        this.meals = res.recipes.map((r: any) => ({
+          name: r.name,
+          description: r.description,
+          metabolic_justification: r.justification,
+          metabolic_score: r.metabolic_alignment_score,
+          freshness_priority: "critical", 
+          prep_time_minutes: r.prep_time_minutes,
+          ingredients_used: r.ingredients_used,
+          instructions: r.instructions
+        }));
+      } else {
+        this.meals = [{
+          name: res.name || "Unknown Recipe",
+          description: res.description || "Failed to parse multiple recipes",
+          metabolic_justification: res.justification || "Could not parse justification",
+          metabolic_score: res.metabolic_alignment_score || 0,
+          freshness_priority: "critical", 
+          prep_time_minutes: res.prep_time_minutes || 30,
+          ingredients_used: res.ingredients_used || [],
+          instructions: res.instructions || []
+        }];
+      }
     } catch (e: any) {
       this.error = e.message;
     } finally {
@@ -90,6 +104,24 @@ const PRIORITY_LABELS: Record<string, string> = {
   normal: "Regular recipe",
 };
 
+const FUN_LOADING_MESSAGES = [
+  "Consulting the Metabolic Guard...",
+  "Analyzing your biometric state...",
+  "Matching freshness with flavor...",
+  "Chopping virtual veggies...",
+  "Simmering the data...",
+  "Checking for critical ingredients...",
+  "Sprinkling some AI magic...",
+  "Optimizing for recovery...",
+  "Waking up the digital chef...",
+  "Reading your dietary profile...",
+  "Tasting the code...",
+  "Aligning macros and metrics...",
+  "Rescuing items from the fridge...",
+  "Plating your personalized plan...",
+  "Calculating nutritional harmony..."
+];
+
 export default function MealsPage() {
   const navigate = useNavigate();
   const [meals, setMeals] = useState<any[]>(mealsStore.meals);
@@ -97,6 +129,7 @@ export default function MealsPage() {
   const [snackbar, setSnackbar] = useState("");
   const [tips, setTips] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
+  const [loadingIndex, setLoadingIndex] = useState(0);
   
   useEffect(() => {
     return mealsStore.subscribe(() => {
@@ -106,7 +139,21 @@ export default function MealsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+      interval = setInterval(() => {
+        setLoadingIndex((prev) => (prev + 1) % FUN_LOADING_MESSAGES.length);
+      }, 2000);
+    } else {
+      setLoadingIndex(0);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
   const loadSuggestions = async () => {
+    // Optionally randomize starting index
+    setLoadingIndex(Math.floor(Math.random() * FUN_LOADING_MESSAGES.length));
     mealsStore.generate();
   };
 
@@ -174,12 +221,12 @@ export default function MealsPage() {
         </Button>
       </Stack>
 
-
-
       {loading && !meals.length && (
         <Box sx={{ textAlign: "center", py: 4 }}>
           <CircularProgress />
-          <Typography color="text.secondary" sx={{ mt: 2 }}>Crafting meals from your inventory...</Typography>
+          <Typography color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
+            {FUN_LOADING_MESSAGES[loadingIndex]}
+          </Typography>
         </Box>
       )}
 

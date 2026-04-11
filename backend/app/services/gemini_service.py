@@ -199,10 +199,10 @@ async def suggest_meals(
     dietary_prompt: str = "No dietary restrictions.",
     household_size: int = 1,
 ) -> list[dict]:
-    """Generate meal suggestions prioritizing items by freshness, respecting dietary restrictions."""
-    good_items = [i for i in inventory_items if i.get("freshness_score", 100) >= 70]
-    use_soon_items = [i for i in inventory_items if 50 <= i.get("freshness_score", 100) < 70]
-    critical_items = [i for i in inventory_items if i.get("freshness_score", 100) < 50]
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
+    good_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 70]
+    use_soon_items = [i for i in safe_inventory if 50 <= i.get("freshness_score", 100) < 70]
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
 
     inventory_summary = ""
     if critical_items:
@@ -310,8 +310,9 @@ async def generate_weekly_meal_plan(
     household_size: int = 1,
 ) -> dict[str, Any]:
     """Generate a 7-day meal plan projecting freshness forward."""
+    safe_inventory = [item for item in inventory_items if not item.get("visual_hazard", False)]
     items_summary = ""
-    for item in inventory_items:
+    for item in safe_inventory:
         items_summary += (
             f"  - {item['name']} (category: {item['category']}, freshness: {item.get('freshness_score', 100)}%, "
             f"qty: {item['quantity']} {item['unit']}, storage: {item.get('storage', 'fridge')})\n"
@@ -465,9 +466,10 @@ async def generate_metabolic_recipe(
       2. Biometric state of the user.
       3. User profile goals/restrictions.
     """
-    # Separate inventory by freshness constraint
-    critical_items = [i for i in inventory_items if i.get("freshness_score", 100) < 50]
-    stable_items = [i for i in inventory_items if i.get("freshness_score", 100) >= 50]
+    # Separate inventory by freshness constraint and exclude items with visual hazards
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
+    stable_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 50]
     
     inv_summary = "CRITICAL (Must Use):\n"
     for i in critical_items:
@@ -477,7 +479,7 @@ async def generate_metabolic_recipe(
         inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
 
     prompt = f"""You are the 'Metabolic Guard', an elite constraint-driven cooking AI.
-Your goal is to suggest ONE highly optimized meal recipe that perfectly balances the user's BIOLOGICAL NEEDS with their INVENTORY CONSTRAINTS.
+Your goal is to suggest THREE highly optimized meal recipes that perfectly balance the user's BIOLOGICAL NEEDS with their INVENTORY CONSTRAINTS.
 
 USER PROFILE & DIET GOALS:
 {profile_data}
@@ -496,16 +498,21 @@ RULES:
    - You MUST utilize at least some items from the "CRITICAL" inventory list to prevent food waste.
    - You may use "STABLE" items to round out the nutritional profile.
 3. STRICT DIETARY ADHERENCE: Never violate the user's dietary restrictions or fitness goals.
+4. VARIED SUGGESTIONS: Ensure the three recipes offer different flavors or types of meals (e.g. one breakfast-style, one lunch, one dinner, or different cuisines).
 
 Return JSON in this EXACT format:
 {{
-  "name": "Recipe Name",
-  "description": "Short description of why this recipe is perfect for their biometric state",
-  "ingredients_used": ["..."],
-  "instructions": ["..."],
-  "prep_time_minutes": 25,
-  "metabolic_alignment_score": 95,
-  "justification": "Detailed explanation of how this targets their specific biometric needs."
+  "recipes": [
+    {{
+      "name": "Recipe Name",
+      "description": "Short description of why this recipe is perfect for their biometric state",
+      "ingredients_used": ["..."],
+      "instructions": ["..."],
+      "prep_time_minutes": 25,
+      "metabolic_alignment_score": 95,
+      "justification": "Detailed explanation of how this targets their specific biometric needs."
+    }}
+  ]
 }}
 
 Return ONLY valid JSON, no markdown fences."""

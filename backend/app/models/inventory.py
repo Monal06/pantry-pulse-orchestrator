@@ -70,6 +70,8 @@ class PantryItemBase(BaseModel):
     barcode: Optional[str] = None
     notes: Optional[str] = None
     price: Optional[float] = None
+    visual_hazard: bool = False
+    ai_freshness_score: Optional[float] = None
 
 
 class PantryItemCreate(PantryItemBase):
@@ -86,6 +88,8 @@ class PantryItemUpdate(BaseModel):
     is_perishable: Optional[bool] = None
     notes: Optional[str] = None
     price: Optional[float] = None
+    visual_hazard: Optional[bool] = None
+    ai_freshness_score: Optional[float] = None
 
 
 class PantryItem(PantryItemBase):
@@ -95,6 +99,7 @@ class PantryItem(PantryItemBase):
     purchase_date: Optional[date] = None
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
+    visual_hazard: bool = False
     created_at: Optional[datetime] = None
 
     @classmethod
@@ -111,7 +116,18 @@ class PantryItem(PantryItemBase):
             purchase = date.fromisoformat(purchase)
 
         is_perishable = row.get("is_perishable", True)
-        score = compute_freshness(added, category, storage, purchase) if is_perishable else 100.0
+
+        # Use AI freshness score if available, otherwise compute standard decay
+        if row.get("ai_freshness_score") is not None:
+            score = float(row["ai_freshness_score"])
+        else:
+            score = compute_freshness(added, category, storage, purchase) if is_perishable else 100.0
+
+        visual_hazard = row.get("visual_hazard", False)
+        
+        # Hard cap freshness to zero for chemically/visually hazardous ingredients
+        if visual_hazard:
+            score = 0.0
 
         return cls(
             id=row["id"],
@@ -127,6 +143,8 @@ class PantryItem(PantryItemBase):
             price=row.get("price"),
             added_date=added,
             purchase_date=purchase,
+            visual_hazard=visual_hazard,
+            ai_freshness_score=row.get("ai_freshness_score"),
             freshness_score=score,
             freshness_status=freshness_category(score),
             created_at=row.get("created_at"),
