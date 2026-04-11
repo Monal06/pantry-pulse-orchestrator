@@ -131,9 +131,13 @@ async def analyze_fridge_photo(
                 for report in spoilage_reports
             )
 
-            # If item has visual spoilage, set purchase_date to 10 days ago
-            # This makes freshness_score < 50, triggering Exit Strategy
-            purchase_date = (date.today() - timedelta(days=10)) if has_spoilage else date.today()
+            # Check ensemble freshness flags if any have a safety cap applied
+            ens_flags = freshness_scores.get(item_name, {}).get("visual_flags", [])
+            has_ensemble_hazard = any("cap_applied" in f.get("type", "") for f in ens_flags)
+            is_hazardous = has_spoilage or has_ensemble_hazard
+
+            # Capture explicit AI freshness score
+            ens_score = freshness_scores.get(item_name, {}).get("freshness_score")
 
             item = PantryItemCreate(
                 name=item_name,
@@ -143,7 +147,9 @@ async def analyze_fridge_photo(
                 storage=StorageLocation(raw_item.get("storage", "fridge")),
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
-                purchase_date=purchase_date,
+                purchase_date=date.today(),
+                visual_hazard=is_hazardous,
+                ai_freshness_score=ens_score
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
