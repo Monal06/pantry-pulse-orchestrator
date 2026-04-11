@@ -32,7 +32,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from typing import Optional
+
+# Set HuggingFace offline mode at module load time (before any lazy imports).
+# This must happen before transformers is imported anywhere.
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +61,7 @@ def _load_vit() -> bool:
         return _vit_available
 
     try:
-        import os, ssl, torch
-
-        # Force HuggingFace into fully offline mode — models are already cached locally.
-        # This prevents all network requests including the background safetensors thread.
-        os.environ["HF_DATASETS_OFFLINE"] = "1"
-        os.environ["TRANSFORMERS_OFFLINE"] = "1"
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
+        import torch
         # AutoImageProcessor is the modern API; AutoFeatureExtractor is the legacy name
         from transformers import AutoImageProcessor, AutoFeatureExtractor, AutoModel
 

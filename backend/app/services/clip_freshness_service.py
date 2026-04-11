@@ -32,7 +32,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Optional
+
+# Set HuggingFace offline mode at module load time (before any lazy imports).
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +60,8 @@ def _load_clip() -> bool:
         return _clip_available
 
     try:
-        import os, ssl, torch
+        import torch
         from transformers import CLIPModel, CLIPProcessor
-
-        # Force HuggingFace into fully offline mode — models are already cached locally.
-        # This prevents all network requests including the background safetensors thread.
-        os.environ["HF_DATASETS_OFFLINE"] = "1"
-        os.environ["TRANSFORMERS_OFFLINE"] = "1"
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
         logger.info("[CLIP] Loading openai/clip-vit-base-patch32 from cache...")
         _clip_processor = CLIPProcessor.from_pretrained(
