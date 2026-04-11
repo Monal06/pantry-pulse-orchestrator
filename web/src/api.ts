@@ -27,6 +27,7 @@ export async function addManualItem(item: {
   unit: string;
   storage: string;
   is_perishable: boolean;
+  purchase_date?: string;
 }) {
   return request("/inventory", {
     method: "POST",
@@ -260,5 +261,95 @@ export async function generateMetabolicPlan(payload: any) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getSmartExitStrategies(params: {
+  item_name: string;
+  category: string;
+  freshness_score: number;
+  quantity?: number;
+  unit?: string;
+  location?: string;
+  has_garden?: boolean;
+  in_office?: boolean;
+  eco_priority?: string;
+  visual_hazard?: boolean;
+  verified_age_days?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  queryParams.append("item_name", params.item_name);
+  queryParams.append("category", params.category);
+  queryParams.append("freshness_score", params.freshness_score.toString());
+  if (params.quantity) queryParams.append("quantity", params.quantity.toString());
+  if (params.unit) queryParams.append("unit", params.unit);
+  if (params.location) queryParams.append("location", params.location);
+  if (params.has_garden !== undefined) queryParams.append("has_garden", params.has_garden.toString());
+  if (params.in_office !== undefined) queryParams.append("in_office", params.in_office.toString());
+  if (params.eco_priority) queryParams.append("eco_priority", params.eco_priority);
+  if (params.visual_hazard !== undefined) queryParams.append("visual_hazard", params.visual_hazard.toString());
+  if (params.verified_age_days !== undefined) queryParams.append("verified_age_days", params.verified_age_days.toString());
+
+  return request(`/orchestrate/smart/exit-strategies?${queryParams.toString()}`, {
+    method: "POST",
+  });
+}
+
+export async function generateUpcycleRecipes(params: {
+  item_name: string;
+  category: string;
+  freshness_score: number;
+  quantity?: number;
+  unit?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  queryParams.append("item_name", params.item_name);
+  queryParams.append("category", params.category);
+  queryParams.append("freshness_score", params.freshness_score.toString());
+  if (params.quantity) queryParams.append("quantity", params.quantity.toString());
+  if (params.unit) queryParams.append("unit", params.unit);
+
+  return request(`/orchestrate/upcycle/recipes?${queryParams.toString()}`, {
+    method: "POST",
+  });
+}
+
+export async function findCharitiesForDonation(params: {
+  item_name: string;
+  category: string;
+  quantity?: number;
+  unit?: string;
+  location?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  queryParams.append("item_name", params.item_name);
+  queryParams.append("category", params.category);
+  if (params.quantity) queryParams.append("quantity", params.quantity.toString());
+  if (params.unit) queryParams.append("unit", params.unit);
+  if (params.location) queryParams.append("location", params.location);
+
+  return request(`/orchestrate/share/find-charities?${queryParams.toString()}`, {
+    method: "POST",
+  });
+}
+
+export async function getDisposalInstructions(params: {
+  item_name: string;
+  category: string;
+  quantity?: number;
+  unit?: string;
+  spoilage_type?: string;
+  location?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  queryParams.append("item_name", params.item_name);
+  queryParams.append("category", params.category);
+  if (params.quantity) queryParams.append("quantity", params.quantity.toString());
+  if (params.unit) queryParams.append("unit", params.unit);
+  if (params.spoilage_type) queryParams.append("spoilage_type", params.spoilage_type);
+  if (params.location) queryParams.append("location", params.location);
+
+  return request(`/orchestrate/bin/disposal-instructions?${queryParams.toString()}`, {
+    method: "POST",
   });
 }

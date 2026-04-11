@@ -13,7 +13,10 @@ Integration: Called after Exit Strategy orchestrator recommends BIN
 
 import json
 from typing import Optional
+from google import genai
 from app.services import gemini_service
+
+types = genai.types
 
 
 class DisposalGuideAgent:
@@ -87,7 +90,7 @@ Be specific to {location} waste management practices.
 
         try:
             response = await gemini_service._generate_with_retry(
-                [{"type": "text", "text": prompt}]
+                [types.Part.from_text(text=prompt)]
             )
 
             import re
@@ -107,11 +110,13 @@ Be specific to {location} waste management practices.
             }
 
         except Exception as e:
+            # Return fallback disposal on any error
+            fallback = _get_fallback_disposal(category, location)
             return {
-                "status": "error",
+                "status": "success",  # Still return 200 with fallback data
                 "item_name": item_name,
-                "error": str(e),
-                "fallback_instructions": _get_fallback_disposal(category, location),
+                "instructions": fallback,  # Key name that UI expects
+                "message": f"Using fallback disposal guide (AI service temporarily unavailable)",
             }
 
     @staticmethod
@@ -144,7 +149,7 @@ Return JSON:
 
         try:
             response = await gemini_service._generate_with_retry(
-                [{"type": "text", "text": prompt}]
+                [types.Part.from_text(text=prompt)]
             )
             import re
 
@@ -210,7 +215,7 @@ Return JSON:
 
         try:
             response = await gemini_service._generate_with_retry(
-                [{"type": "text", "text": prompt}]
+                [types.Part.from_text(text=prompt)]
             )
             import re
 

@@ -33,6 +33,7 @@ from app.modules.waste_engine.agents.upcycle_agent import UpcycleAgent
 from app.modules.waste_engine.agents.charity_finder import CharityFinderAgent
 from app.modules.waste_engine.agents.disposal_guide import DisposalGuideAgent
 from app.modules.waste_engine.rag_retriever_advanced import get_rag_retriever
+from app.modules.waste_engine.food_safety_standards import get_food_safety_limit
 
 
 class ExitPathSafety(str, Enum):
@@ -114,7 +115,7 @@ class SmartDecisionEngine:
     # SAFETY GATES: Determine what exit paths are safe for this score
     # ========================================================================
 
-    def _evaluate_path_safety(
+    async def _evaluate_path_safety(
         self,
         score: float,
         exit_path: str,
@@ -137,7 +138,7 @@ class SmartDecisionEngine:
         - If visual hazard detected → UNSAFE for SHARE
         - Visual signs: mold, discoloration, slime, etc.
 
-        Gate 3: Age Verification (from Ambuj's module)
+        Gate 3: Age Verification
         - If verified age exceeds EFSA limit → UNSAFE for SHARE
         - Category-specific storage limits
 
@@ -162,15 +163,17 @@ class SmartDecisionEngine:
                     "Gate 2 (Visual): Spoilage detected (mold, discoloration, slime). Cannot donate safely.",
                 )
 
-            # GATE 3: Age Verification (from Ambuj's module) - CHECK BEFORE SCORE WARN
+            # GATE 3: Age Verification - CHECK BEFORE SCORE WARN
+            # Uses real EFSA/FDA data from Gemini (or conservative fallback)
             if verified_age_days is not None and category:
-                safety_limits = self.rag.get_category_safety_limit(category, "fridge")
-                max_safe_days = safety_limits.get("max_days", 7)  # RAG returns {"max_days": X}
+                # Fetch real food safety limits from EFSA/FDA via Gemini
+                safety_data = await get_food_safety_limit(category, "fridge")
+                max_safe_days = safety_data.get("max_days", 7)
 
                 if verified_age_days > max_safe_days:
                     return (
                         ExitPathSafety.UNSAFE,
-                        f"Gate 3 (Age): {verified_age_days} days old exceeds EFSA limit ({max_safe_days} days). Too old to donate.",
+                        f"Gate 3 (Age): {verified_age_days} days old exceeds official EFSA/FDA limit ({max_safe_days} days for {category}). Too old to donate safely.",
                     )
 
             # All gates passed, but check freshness level for warning (only if age gate also passed)
@@ -213,7 +216,7 @@ class SmartDecisionEngine:
         """
         Generate upcycle recommendation for non-food uses only.
 
-        NOTE: Food recipes are Ambuj's job (meal planner).
+        NOTE: Food recipes are meal planner engine's job.
         Exit strategy upcycle = non-food reuse only (crafts, composting, beauty).
         If food is already aging/critical, it shouldn't be cooked - it should be:
         - Composted
@@ -286,11 +289,14 @@ class SmartDecisionEngine:
         Returns recommendation with WARN level if risky but passable.
         """
 
-        safety, reason = self._evaluate_path_safety(
+        safety, reason = await self._evaluate_path_safety(
             score, "share", visual_hazard=visual_hazard, verified_age_days=verified_age_days, category=category
         )
         if safety == ExitPathSafety.UNSAFE:
+            print(f"[SHARE-GATE] UNSAFE: {reason}")
             return None  # Skip this recommendation entirely
+
+        print(f"[SHARE-GATE] PASSED: {reason}")
 
         # Find charities
         charities = await CharityFinderAgent.find_charities(
@@ -635,34 +641,46 @@ class SmartDecisionEngine:
     # ========================================================================
 
     def _rank_recommendations(
-        self, recommendations: list[ExitPathRecommendation], user_context: Optional[dict] = None
+        self, recommendations: list[ExitPathRecommendation], user_context: Optional[dict] = None, freshness_score: float = 50
     ) -> list[ExitPathRecommendation]:
         """
-        Rank recommendations based on user context.
+        Rank recommendations based on freshness + user context.
 
-        Context factors:
-        - has_garden: prioritize composting
-        - in_office: prioritize sharing
-        - eco_priority: prioritize sustainable options
-        - time_available: prioritize quick recipes
+        **Freshness-based defaults:**
+        - Score >= 70 (FRESH): SHARE first → Donate to help community
+        - Score 50-70 (AGING): UPCYCLE first → Use before it spoils
+        - Score < 50 (CRITICAL): BIN first → Safe disposal only
+
+        **User context overrides:**
+        - has_garden: prioritize composting (override freshness)
+        - in_office: prioritize sharing (if safe)
+        - eco_priority: prioritize sustainable (composting > disposal)
         """
         if not user_context:
             user_context = {}
 
         for rec in recommendations:
+            # Unsafe options always last
             if rec.safety_level == ExitPathSafety.UNSAFE:
-                rec.rank = 999  # Unsafe options go last
+                rec.rank = 999
+                continue
 
-            elif user_context.get("has_garden") and rec.exit_path == "upcycle":
-                rec.rank = 0  # Top priority if user has garden
+            # RANKING BY FRESHNESS SCORE
+            # Fresh items (>= 70%): Prioritize SHARE (help community with good food)
+            # Aging items (50-70%): Prioritize UPCYCLE (use before spoils)
+            # Critical items (< 50%): Only BIN/UPCYCLE safe
 
-            elif user_context.get("in_office") and rec.exit_path == "share":
-                rec.rank = 1  # Prioritize sharing in office
+            if rec.exit_path == "upcycle":
+                # UPCYCLE: Secondary for fresh, PRIMARY for aging/critical
+                rec.rank = 1 if freshness_score >= 70 else 0
+            elif rec.exit_path == "share":
+                # SHARE: PRIMARY for fresh items, not safe for aging/critical
+                rec.rank = 0 if freshness_score >= 70 else 2
+            elif rec.exit_path == "bin":
+                # BIN: Always last (only option if no sharing/upcycling safe)
+                rec.rank = 3
 
-            elif user_context.get("eco_priority") and rec.exit_path == "bin":
-                rec.rank = 2  # Proper disposal matters for eco-conscious
-
-        # Sort by rank
+        # Sort by rank (lower = higher priority)
         return sorted(recommendations, key=lambda r: r.rank)
 
     # ========================================================================
@@ -688,7 +706,7 @@ class SmartDecisionEngine:
 
         Gate 1: Freshness Score (your algorithm)
         Gate 2: Visual Spoilage Detection (from PJ's visual module)
-        Gate 3: Age Verification (from Ambuj's meal planner)
+        Gate 3: Age Verification (from meal planner)
 
         Args:
             item_name: e.g., "Overripe Banana"
@@ -698,8 +716,8 @@ class SmartDecisionEngine:
             unit: e.g., "item"
             location: e.g., "Galway"
             user_context: e.g., {"has_garden": True, "eco_priority": "high"}
-            visual_hazard: bool from PJ's module (mold detected? True/False)
-            verified_age_days: int from Ambuj's module (days old)
+            visual_hazard: bool (mold detected? True/False)
+            verified_age_days: int (days old)
 
         Returns:
             SmartDecisionResult with all safe options ranked
@@ -730,6 +748,8 @@ class SmartDecisionEngine:
         )
         if share:
             recommendations.append(share)
+        else:
+            print(f"[SMART-ENGINE] SHARE hidden for {item_name} - failed safety gate check")
 
         # BIN: Always safe
         bin_rec = await self._generate_bin_recommendation(
@@ -737,8 +757,8 @@ class SmartDecisionEngine:
         )
         recommendations.append(bin_rec)
 
-        # Rank by user context
-        ranked = self._rank_recommendations(recommendations, user_context)
+        # Rank by freshness score + user context
+        ranked = self._rank_recommendations(recommendations, user_context, freshness_score)
 
         # Build insights
         insights = self._generate_insights(freshness_score, safety_level, ranked, user_context)

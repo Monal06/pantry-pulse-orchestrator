@@ -9,7 +9,7 @@ critical freshness scores (< 50) into three exit paths:
 
 The Triple-Check Guardrail validates decisions across three data sources:
   1. Freshness Score (from FreshSave inventory model)
-  2. Visual Spoilage (from PJ's multimodal analysis module)
+  2. Visual Spoilage (from visual analysis module)
   3. Safety/Age Limits (from RAG-retrieved food safety guidelines)
 """
 

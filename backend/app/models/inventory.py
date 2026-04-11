@@ -42,8 +42,11 @@ def get_decay_rate(category: str, storage: str) -> float:
     return rates.get(storage, 3.0)
 
 
-def compute_freshness(added_date: date, category: str, storage: str) -> float:
-    days_elapsed = (date.today() - added_date).days
+def compute_freshness(added_date: date, category: str, storage: str, purchase_date: Optional[date] = None) -> float:
+    # Use actual purchase date if known, otherwise use added_date
+    # This handles case where user buys Monday but adds to system Friday
+    age_reference = purchase_date if purchase_date else added_date
+    days_elapsed = (date.today() - age_reference).days
     decay = get_decay_rate(category, storage)
     freshness = max(0.0, 100.0 - days_elapsed * decay)
     return round(freshness, 1)
@@ -71,6 +74,7 @@ class PantryItemBase(BaseModel):
 
 class PantryItemCreate(PantryItemBase):
     added_date: date = Field(default_factory=date.today)
+    purchase_date: Optional[date] = None
 
 
 class PantryItemUpdate(BaseModel):
@@ -88,6 +92,7 @@ class PantryItem(PantryItemBase):
     id: str
     user_id: str
     added_date: date
+    purchase_date: Optional[date] = None
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
     created_at: Optional[datetime] = None
@@ -100,8 +105,13 @@ class PantryItem(PantryItemBase):
         if isinstance(added, str):
             added = date.fromisoformat(added)
 
+        # Parse purchase_date if provided
+        purchase = row.get("purchase_date")
+        if purchase and isinstance(purchase, str):
+            purchase = date.fromisoformat(purchase)
+
         is_perishable = row.get("is_perishable", True)
-        score = compute_freshness(added, category, storage) if is_perishable else 100.0
+        score = compute_freshness(added, category, storage, purchase) if is_perishable else 100.0
 
         return cls(
             id=row["id"],
@@ -116,6 +126,7 @@ class PantryItem(PantryItemBase):
             notes=row.get("notes"),
             price=row.get("price"),
             added_date=added,
+            purchase_date=purchase,
             freshness_score=score,
             freshness_status=freshness_category(score),
             created_at=row.get("created_at"),

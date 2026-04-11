@@ -62,7 +62,7 @@ def get_recipe_status(score, visual_hazard):
         return "❌ NO recipes (moldy)"
     if score < 30:
         return "❌ NO recipes (too spoiled)"
-    # Recipes would be in Ambuj's meal planner, not exit strategy
+    # Recipes would be in meal planner, not exit strategy
     return "⚠️  Recipes via Meal Planner only"
 
 # Test cases across all 8 food categories
@@ -216,7 +216,7 @@ def run_comprehensive_test():
 
     print("""
     The refactored system correctly:
-    1. Separates recipes (Ambuj's meal planner) from composting (Monal's exit strategy)
+    1. Separates recipes (meal planner) from composting (Monal's exit strategy)
     2. Prevents moldy items from getting food recipes in UPCYCLE
     3. Hides SHARE option for all unsafe items (moldy, too old, low score)
     4. Always offers safe alternatives (composting, disposal)

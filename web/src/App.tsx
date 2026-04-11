@@ -14,6 +14,7 @@ import { theme } from "./theme";
 
 import InventoryPage from "./pages/InventoryPage";
 import AddItemsPage from "./pages/AddItemsPage";
+import ExitStrategyPage from "./pages/ExitStrategyPage";
 import MealsPage from "./pages/MealsPage";
 import WeeklyPlanPage from "./pages/WeeklyPlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
@@ -28,6 +29,7 @@ const DRAWER_WIDTH = 240;
 
 const NAV_ITEMS = [
   { path: "/", label: "Pantry", icon: <Kitchen /> },
+  { path: "/exit-strategy", label: "Give It a New Life", icon: <BarChart /> },
   { path: "/meals", label: "Meals", icon: <Restaurant /> },
   { path: "/weekly-plan", label: "Weekly Plan", icon: <CalendarMonth /> },
   { path: "/shopping", label: "Shopping", icon: <ShoppingCart /> },
@@ -122,6 +124,7 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<InventoryPage />} />
             <Route path="/add-items" element={<AddItemsPage />} />
+            <Route path="/exit-strategy" element={<ExitStrategyPage />} />
             <Route path="/meals" element={<MealsPage />} />
             <Route path="/weekly-plan" element={<WeeklyPlanPage />} />
             <Route path="/shopping" element={<ShoppingPage />} />

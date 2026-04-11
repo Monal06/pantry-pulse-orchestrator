@@ -43,6 +43,9 @@ export default function AddItemsPage() {
   const [isPerishable, setIsPerishable] = useState(true);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [voiceText, setVoiceText] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(
+    new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
+  );
 
   const handleFileUpload = async (analyzeFunc: (file: File) => Promise<any>) => {
     const input = document.createElement("input");
@@ -107,6 +110,7 @@ export default function AddItemsPage() {
         unit,
         storage,
         is_perishable: isPerishable,
+        purchase_date: purchaseDate,
       });
       setSnackbar(`${name} added to your pantry`);
       navigate("/");
@@ -259,6 +263,17 @@ export default function AddItemsPage() {
                   <ToggleButton value="perishable">Perishable</ToggleButton>
                   <ToggleButton value="non">Non-Perishable</ToggleButton>
                 </ToggleButtonGroup>
+              </Box>
+              <Box sx={{ pt: 1, border: "1px solid #e0e0e0", p: 2, borderRadius: 1, bgcolor: "#fafafa" }}>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>📅 When was this purchased?</Typography>
+                <TextField
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  fullWidth
+                  size="small"
+                  helperText="Defaults to today. Change if item is older."
+                />
               </Box>
               <Button variant="contained" onClick={handleManualAdd} disabled={loading} size="large">
                 Add to Pantry
