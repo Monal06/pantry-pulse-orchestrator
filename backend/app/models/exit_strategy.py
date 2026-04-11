@@ -25,11 +25,11 @@ class TripleCheckInput:
     storage: str
     quantity: float
 
-    # Source 2: From PJ's visual module (optional, future integration)
+    # Source 2: From visual spoilage detection module (optional, future integration)
     visual_spoilage_detected: bool = False
     visual_confidence: float = 0.5  # 0-1 scale
 
-    # Source 3: From Ambuj's age verification (optional, future integration)
+    # Source 3: age verification (optional, future integration)
     verified_age_days: Optional[int] = None
 
 

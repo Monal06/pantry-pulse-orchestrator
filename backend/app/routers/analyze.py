@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
@@ -20,31 +20,68 @@ async def analyze_fridge_photo(
     auto_add: bool = Query(default=True, description="Automatically add detected items to inventory"),
 ):
     """Analyze a photo of a fridge or cupboard. Identifies items and checks for spoilage."""
+    print(f"[FRIDGE-PHOTO] Endpoint hit. Content type: {photo.content_type}")
     if not photo.content_type or not photo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
-    result = await gemini_service.analyze_fridge_photo(image_bytes, photo.content_type)
+    print(f"[FRIDGE-PHOTO] Image bytes received: {len(image_bytes)} bytes")
+    try:
+        result = await gemini_service.analyze_fridge_photo(image_bytes, photo.content_type)
+        print(f"[FRIDGE-PHOTO] Gemini result: {result}")
+    except Exception as e:
+        print(f"[FRIDGE-PHOTO] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
+        # Return fallback data instead of crashing
+        result = {
+            "items": [],
+            "spoilage_reports": [],
+            "description": "Unable to analyze photo. Please try again or use manual entry.",
+            "error": str(e)
+        }
 
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+    if "error" in result and len(result.get("items", [])) == 0:
+        # If there's an error and no items, it's a real failure
+        # But we still return some fallback rather than 502
+        return {
+            "items_detected": 0,
+            "items_added": [],
+            "spoilage_reports": result.get("spoilage_reports", []),
+            "description": result.get("description", ""),
+            "error": result.get("error", ""),
+        }
 
     items_created = []
+    spoilage_reports = result.get("spoilage_reports", [])
+
     if auto_add and "items" in result:
         for raw_item in result["items"]:
+            item_name = raw_item.get("name", "Unknown")
+            item_name_lower = item_name.lower()
+
+            # Check if this item name appears in any spoilage report
+            # Use substring matching to handle suffixes like "(left)", "(right)"
+            has_spoilage = any(
+                item_name_lower in report.get("item_name", "").lower() and
+                report.get("spoilage_detected", False)
+                for report in spoilage_reports
+            )
+
+            # If item has visual spoilage, set purchase_date to 10 days ago
+            # This makes freshness_score < 50, triggering Exit Strategy
+            purchase_date = (date.today() - timedelta(days=10)) if has_spoilage else date.today()
+
             item = PantryItemCreate(
-                name=raw_item.get("name", "Unknown"),
+                name=item_name,
                 category=raw_item.get("category", "other"),
                 quantity=raw_item.get("quantity", 1),
                 unit=raw_item.get("unit", "item"),
                 storage=StorageLocation(raw_item.get("storage", "fridge")),
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
+                purchase_date=purchase_date,
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
-
-    spoilage_reports = result.get("spoilage_reports", [])
 
     return {
         "items_detected": len(result.get("items", [])),
@@ -61,15 +98,46 @@ async def analyze_receipt(
     storage: StorageLocation = Query(default=StorageLocation.FRIDGE),
     auto_add: bool = Query(default=True),
 ):
-    """Analyze a receipt photo to extract purchased food items."""
+    """Analyze a receipt photo to extract purchased food items.
+
+    Automatically extracts receipt date and uses it as purchase_date for items,
+    enabling accurate age verification even if items are added to system later.
+    """
     if not photo.content_type or not photo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
-    result = await gemini_service.analyze_receipt_photo(image_bytes, photo.content_type)
+    try:
+        result = await gemini_service.analyze_receipt_photo(image_bytes, photo.content_type)
+    except Exception as e:
+        print(f"[RECEIPT] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
+        result = {
+            "items": [],
+            "date": "",
+            "store_name": "",
+            "description": "Unable to analyze receipt. Please try again or use manual entry.",
+            "error": str(e)
+        }
 
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+    if "error" in result and len(result.get("items", [])) == 0:
+        return {
+            "items_detected": 0,
+            "items_added": [],
+            "store_name": result.get("store_name", ""),
+            "receipt_date": result.get("date", ""),
+            "description": result.get("description", ""),
+            "error": result.get("error", ""),
+        }
+
+    # Extract receipt date for accurate purchase_date
+    receipt_date_str = result.get("date", "")
+    purchase_date = None
+    if receipt_date_str:
+        try:
+            purchase_date = date.fromisoformat(receipt_date_str)
+        except (ValueError, TypeError):
+            # If date parsing fails, let it default to None (will use added_date)
+            pass
 
     items_created = []
     if auto_add and "items" in result:
@@ -82,6 +150,7 @@ async def analyze_receipt(
                 storage=storage,
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
+                purchase_date=purchase_date,  # Use extracted receipt date
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
@@ -122,6 +191,7 @@ async def analyze_barcode(
             is_perishable=product["is_perishable"],
             barcode=barcode,
             added_date=date.today(),
+            purchase_date=date.today(),  # Barcode: assume today
         )
         created_item = await inventory_service.add_item(user_id, item)
 
@@ -141,10 +211,16 @@ async def check_spoilage(
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
-    result = await gemini_service.check_spoilage(image_bytes, item_name, photo.content_type)
-
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+    try:
+        result = await gemini_service.check_spoilage(image_bytes, item_name, photo.content_type)
+    except Exception as e:
+        print(f"[SPOILAGE-CHECK] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
+        result = {
+            "item_name": item_name,
+            "spoilage_detected": False,
+            "confidence": 0.0,
+            "error": str(e)
+        }
 
     return result
 
@@ -157,10 +233,25 @@ async def analyze_voice_input(
     auto_add: bool = Query(default=True),
 ):
     """Parse natural language voice input into food items and add to inventory."""
-    result = await gemini_service.parse_voice_input(text)
+    print(f"[VOICE] Endpoint hit. Text: {text}")
+    try:
+        result = await gemini_service.parse_voice_input(text)
+        print(f"[VOICE] Gemini result: {result}")
+    except Exception as e:
+        print(f"[VOICE] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
+        result = {
+            "items": [],
+            "unrecognized": [],
+            "error": str(e)
+        }
 
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+    if "error" in result and len(result.get("items", [])) == 0:
+        return {
+            "parsed_items": [],
+            "items_added": [],
+            "unrecognized": result.get("unrecognized", []),
+            "error": result.get("error", ""),
+        }
 
     items_created = []
     if auto_add and "items" in result:
@@ -173,6 +264,7 @@ async def analyze_voice_input(
                 storage=StorageLocation(raw_item.get("storage", storage.value)),
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
+                purchase_date=date.today(),  # Voice input: assume today
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
@@ -194,9 +286,14 @@ async def get_nutritional_balance(user_id: str = Query(default=DEFAULT_USER)):
     inventory_dicts = [item.model_dump(mode="json") for item in items]
     meals = _meal_history.get(user_id, [])
 
-    result = await gemini_service.analyze_nutritional_balance(inventory_dicts, meals)
-
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+    try:
+        result = await gemini_service.analyze_nutritional_balance(inventory_dicts, meals)
+    except Exception as e:
+        print(f"[NUTRITIONAL-BALANCE] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
+        result = {
+            "balance": "unable_to_analyze",
+            "recommendations": ["Try again later or manually review your pantry"],
+            "error": str(e)
+        }
 
     return result

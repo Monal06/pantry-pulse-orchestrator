@@ -171,19 +171,17 @@ class MockRAGRetriever(RAGRetriever):
     )
 
     def get_category_safety_limit(self, category: str, storage: str) -> dict:
-        """Get max safe storage days from EFSA/FDA guidelines"""
-        category = category.lower()
-        storage = storage.lower()
+        """
+        DEPRECATED: Use food_safety_standards.get_food_safety_limit() instead.
 
-        limits = self.SAFETY_LIMITS.get(category, self.SAFETY_LIMITS["other"])
-        max_days = limits.get(storage, 7)  # Conservative default
-
-        return {
-            "category": category,
-            "storage": storage,
-            "max_days": max_days,
-            "source": "EFSA/FDA",
-        }
+        This method is kept for backwards compatibility but should not be called.
+        The real EFSA/FDA data is now fetched dynamically via Gemini in
+        food_safety_standards.py to avoid hardcoding health-critical data.
+        """
+        raise NotImplementedError(
+            "MockRAGRetriever.get_category_safety_limit() is deprecated. "
+            "Use food_safety_standards.get_food_safety_limit() for real EFSA/FDA data via Gemini."
+        )
 
     def get_safety_guidelines(self, category: str) -> str:
         """Get detailed safety info for category"""

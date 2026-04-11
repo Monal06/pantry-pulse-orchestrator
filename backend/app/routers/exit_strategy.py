@@ -42,7 +42,7 @@ async def orchestrate_exit_strategy(
 
     This endpoint implements the Triple-Check Guardrail:
       1. **Freshness Gate**: Score-based triage (< 50 = critical)
-      2. **Visual Gate**: Spoilage detection (from PJ's multimodal module, future)
+      2. **Visual Gate**: Spoilage detection (from visual analysis module, future)
       3. **Safety Gate**: Category-specific age limits (from RAG system)
 
     Based on these three gates, the orchestrator determines the best exit path:
@@ -96,10 +96,10 @@ async def orchestrate_exit_strategy(
         added_date=item.added_date.isoformat(),
         storage=item.storage.value,
         quantity=item.quantity,
-        # Integration point: PJ's visual module
+        # Integration point: visual module
         # visual_spoilage_detected=visual_analysis.get("spoilage_detected", False),
         # visual_confidence=visual_analysis.get("confidence", 0.5),
-        # Integration point: Ambuj's age verification
+        # Integration point: age verification
         # verified_age_days=age_verification.get("days"),
     )
 
@@ -376,10 +376,10 @@ async def get_smart_exit_strategies(
     in_office: bool = Query(default=False, description="Is user in office?"),
     eco_priority: str = Query(default="medium", description="User environmental priority"),
     visual_hazard: Optional[bool] = Query(
-        default=None, description="[FROM PJ] Visual spoilage detected? (mold, discoloration, slime). None = unknown/not analyzed"
+        default=None, description="Visual spoilage detected? (mold, discoloration, slime). None = unknown/not analyzed"
     ),
     verified_age_days: Optional[int] = Query(
-        default=None, description="[FROM AMBUJ] Verified age in days (from meal planner). None = not verified"
+        default=None, description="Verified age in days (from meal planner). None = not verified"
     ),
 ):
     """
@@ -391,11 +391,11 @@ async def get_smart_exit_strategies(
     - Evaluates decay based on EFSA/FDA standards
     - Covers all biological hazards
 
-    **Gate 2: Visual Spoilage Detection** (from PJ's module)
+    **Gate 2: Visual Spoilage Detection** (from visual analysis module)
     - Mold, discoloration, slime, texture changes
     - If detected → SHARE becomes UNSAFE
 
-    **Gate 3: Age Verification** (from Ambuj's meal planner)
+    **Gate 3: Age Verification** 
     - Actual days old vs EFSA safety limits
     - If exceeded → SHARE becomes UNSAFE
 

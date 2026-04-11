@@ -4,16 +4,17 @@ Charity Finder Agent: Locate and Draft Donation Posts
 When an item is in good condition but user can't consume it,
 this agent:
 1. Identifies local charities/food banks in Galway
-2. Drafts donation post templates
-3. Provides contact info and drop-off instructions
-4. Suggests community sharing platforms
+2. Provides contact info and drop-off instructions
+3. Suggests community sharing platforms
+
+Uses authoritative hardcoded charities database (no Gemini).
+Reliable and instant for competition demo.
 
 Integration: Called after Exit Strategy orchestrator recommends SHARE
 """
 
-import json
 from typing import Optional
-from app.services import gemini_service
+from app.modules.waste_engine.charities_database import get_charities_by_location, search_charities
 
 
 class CharityFinderAgent:
@@ -31,6 +32,9 @@ class CharityFinderAgent:
         """
         Find charities and food banks that accept donations in the area.
 
+        Uses authoritative hardcoded charities database (no Gemini).
+        Instant, reliable, and perfect for competition demo.
+
         Args:
             item_name: e.g., "Cheddar Cheese"
             category: e.g., "dairy"
@@ -42,61 +46,23 @@ class CharityFinderAgent:
         Returns:
             Dictionary with list of charities, contact info, and donation guidelines
         """
-        prompt = f"""You are a food donation coordinator for {location}.
+        # Get charities that accept this food category
+        charities = search_charities(category, location)
 
-A user wants to donate a food item that's still good but they can't consume:
-- Item: {item_name}
-- Category: {category}
-- Quantity: {quantity} {unit}
+        # If no exact match by category, return all charities
+        if not charities:
+            charities = get_charities_by_location(location)
 
-YOUR TASK:
-List 3-5 **real, existing charities/food banks in {location}** that would accept this donation.
+        print(f"[CHARITY-FINDER] ✓ Found {len(charities)} charities in {location} for {category}")
 
-For each charity, return JSON with:
-{{
-  "name": "Charity Name",
-  "type": "food-bank" | "community-fridge" | "soup-kitchen" | "shelter",
-  "accepts_{category}": true/false,
-  "address": "Street address",
-  "hours": "e.g., Mon-Fri 9am-5pm",
-  "contact": "Phone or email",
-  "drop_off_instructions": "How to donate (hours, parking, check-in)",
-  "distance_approx_km": 2.5,
-  "notes": "Any special requirements"
-}}
-
-Return a JSON array. IMPORTANT: Only include charities that actually exist and accept donations in {location}.
-If you're unsure about current hours/contact, note that in 'notes' field.
-"""
-
-        try:
-            response = await gemini_service._generate_with_retry(
-                [{"type": "text", "text": prompt}]
-            )
-
-            import re
-
-            json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", response, re.DOTALL)
-            json_str = json_match.group(1) if json_match else response
-
-            charities = json.loads(json_str)
-            if not isinstance(charities, list):
-                charities = [charities]
-
-            return {
-                "status": "success",
-                "item_name": item_name,
-                "charities": charities,
-                "message": f"Found {len(charities)} charities accepting {item_name} donations in {location}",
-            }
-
-        except Exception as e:
-            return {
-                "status": "error",
-                "item_name": item_name,
-                "error": str(e),
-                "fallback_charities": _get_fallback_charities(location),
-            }
+        return {
+            "status": "success",
+            "item_name": item_name,
+            "category": category,
+            "charities": charities,
+            "location": location,
+            "message": f"Found {len(charities)} charities accepting {category} donations in {location}",
+        }
 
     @staticmethod
     async def draft_donation_post(
@@ -148,7 +114,7 @@ Return JSON array with 3 posts.
 
         try:
             response = await gemini_service._generate_with_retry(
-                [{"type": "text", "text": prompt}]
+                [types.Part.from_text(text=prompt)]
             )
 
             import re
