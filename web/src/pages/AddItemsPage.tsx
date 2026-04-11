@@ -3,15 +3,24 @@ import {
   Box, Typography, Card, CardContent, Tabs, Tab, Button, TextField,
   ToggleButtonGroup, ToggleButton, CircularProgress, Alert,
   Snackbar, Select, MenuItem, FormControl, InputLabel, Stack,
+  IconButton, Chip, keyframes,
 } from "@mui/material";
 import {
   CameraAlt, Receipt, QrCodeScanner, Mic, Edit, CloudUpload,
+  Stop, DeleteOutline, Send,
 } from "@mui/icons-material";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   analyzeFridgePhoto, analyzeReceipt, analyzeBarcode,
   addManualItem, analyzeVoiceInput,
 } from "../api";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
+
+const pulseRing = keyframes`
+  0%   { transform: scale(1);   opacity: 0.6; }
+  70%  { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+`;
 
 const CATEGORIES = [
   "dairy", "meat", "seafood", "fruit", "vegetable", "bread",
@@ -46,6 +55,9 @@ export default function AddItemsPage() {
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
   );
+
+  // Voice recorder hook
+  const voice = useVoiceRecorder();
 
   const handleFileUpload = async (analyzeFunc: (file: File) => Promise<any>) => {
     const input = document.createElement("input");
@@ -83,12 +95,16 @@ export default function AddItemsPage() {
   };
 
   const handleVoiceSubmit = async () => {
-    if (!voiceText.trim()) return;
+    const text = (voice.transcript || voiceText).trim();
+    if (!text) return;
+    if (voice.isListening) voice.stopListening();
     setLoading(true);
     setResult(null);
     try {
-      const data = await analyzeVoiceInput(voiceText.trim());
+      const data = await analyzeVoiceInput(text);
       setResult(data);
+      voice.resetTranscript();
+      setVoiceText("");
     } catch (e: any) {
       setSnackbar(e.message);
     } finally {
@@ -206,28 +222,140 @@ export default function AddItemsPage() {
       {tab === 3 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Voice / Text Input</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Type or paste what you bought. For example: "I just bought milk, eggs, a bag of spinach, and two chicken breasts"
+            <Typography variant="h6" fontWeight={700} gutterBottom>Voice Input</Typography>
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              Tap the microphone and say what you bought, e.g. <em>"I got milk, eggs, a bag of spinach, and two chicken breasts."</em>
             </Typography>
+
+            {/* ── Microphone button ── */}
+            {voice.isSupported ? (
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 3 }}>
+                <Box sx={{ position: "relative", display: "inline-flex" }}>
+                  {/* Pulse ring when recording */}
+                  {voice.isListening && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        borderRadius: "50%",
+                        border: "3px solid",
+                        borderColor: "error.main",
+                        animation: `${pulseRing} 1.5s ease-out infinite`,
+                      }}
+                    />
+                  )}
+                  <IconButton
+                    onClick={voice.isListening ? voice.stopListening : voice.startListening}
+                    disabled={loading}
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      bgcolor: voice.isListening ? "error.main" : "primary.main",
+                      color: "#fff",
+                      "&:hover": {
+                        bgcolor: voice.isListening ? "error.dark" : "primary.dark",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {voice.isListening ? <Stop sx={{ fontSize: 40 }} /> : <Mic sx={{ fontSize: 40 }} />}
+                  </IconButton>
+                </Box>
+
+                <Typography
+                  variant="body2"
+                  sx={{
+                    mt: 1.5,
+                    fontWeight: 600,
+                    color: voice.isListening ? "error.main" : "text.secondary",
+                  }}
+                >
+                  {voice.isListening ? "Listening… tap to stop" : "Tap to start speaking"}
+                </Typography>
+
+                {voice.isListening && (
+                  <Chip
+                    label="● Recording"
+                    size="small"
+                    color="error"
+                    sx={{
+                      mt: 1,
+                      fontWeight: 600,
+                      "@keyframes blink": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.4 } },
+                      animation: "blink 1s ease-in-out infinite",
+                    }}
+                  />
+                )}
+              </Box>
+            ) : (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  Speech recognition is not supported in this browser. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> for voice input, or type your items below.
+                </Typography>
+              </Alert>
+            )}
+
+            {/* ── Live transcript preview ── */}
+            {voice.isListening && voice.interimTranscript && (
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#E8F5E9", borderRadius: 1, border: "1px dashed #A5D6A7" }}>
+                <Typography variant="caption" fontWeight={600} color="primary.dark">
+                  Hearing:
+                </Typography>
+                <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                  {voice.interimTranscript}
+                </Typography>
+              </Box>
+            )}
+
+            {/* ── Error display ── */}
+            {voice.error && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => voice.resetTranscript()}>
+                {voice.error}
+              </Alert>
+            )}
+
+            {/* ── Editable transcript / text field ── */}
             <TextField
-              label="What did you buy?"
-              value={voiceText}
-              onChange={(e) => setVoiceText(e.target.value)}
+              label={voice.transcript ? "Edit transcript before submitting" : "Or type what you bought"}
+              value={voice.transcript || voiceText}
+              onChange={(e) => {
+                if (voice.transcript) {
+                  voice.setTranscript(e.target.value);
+                } else {
+                  setVoiceText(e.target.value);
+                }
+              }}
               multiline
               rows={3}
               fullWidth
               sx={{ mb: 2 }}
+              placeholder="e.g. milk, eggs, a bag of spinach, and two chicken breasts"
             />
-            <Button
-              variant="contained"
-              startIcon={<Mic />}
-              onClick={handleVoiceSubmit}
-              disabled={loading || !voiceText.trim()}
-              size="large"
-            >
-              Parse and Add Items
-            </Button>
+
+            {/* ── Action buttons ── */}
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                startIcon={<Send />}
+                onClick={handleVoiceSubmit}
+                disabled={loading || (!(voice.transcript || voiceText).trim())}
+                size="large"
+                sx={{ flex: 1 }}
+              >
+                Parse & Add Items
+              </Button>
+              {(voice.transcript || voiceText) && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutline />}
+                  onClick={() => { voice.resetTranscript(); setVoiceText(""); }}
+                  size="large"
+                >
+                  Clear
+                </Button>
+              )}
+            </Stack>
           </CardContent>
         </Card>
       )}

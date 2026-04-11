@@ -323,6 +323,13 @@ async def analyze_voice_input(
     items_created = []
     if auto_add and "items" in result:
         for raw_item in result["items"]:
+            # Use the LLM-extracted purchase_date if available, otherwise default to today
+            raw_purchase = raw_item.get("purchase_date")
+            try:
+                parsed_purchase = date.fromisoformat(raw_purchase) if raw_purchase else date.today()
+            except (ValueError, TypeError):
+                parsed_purchase = date.today()
+
             item = PantryItemCreate(
                 name=raw_item.get("name", "Unknown"),
                 category=raw_item.get("category", "other"),
@@ -331,7 +338,7 @@ async def analyze_voice_input(
                 storage=StorageLocation(raw_item.get("storage", storage.value)),
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
-                purchase_date=date.today(),  # Voice input: assume today
+                purchase_date=parsed_purchase,
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))

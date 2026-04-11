@@ -413,9 +413,12 @@ Return ONLY valid JSON, no markdown fences."""
 
 async def parse_voice_input(text: str) -> dict[str, Any]:
     """Parse natural language voice input into structured food items."""
+    today = __import__("datetime").date.today().isoformat()
     prompt = f"""You are a food item parser. The user said the following while adding items to their pantry:
 
 "{text}"
+
+Today's date is {today}.
 
 Extract each food item mentioned. For each, determine:
 - name: the food item
@@ -424,6 +427,11 @@ Extract each food item mentioned. For each, determine:
 - unit: unit of measure (item, lb, oz, gallon, pack, bunch, bag, bottle, can, box, dozen)
 - is_perishable: true/false
 - storage: most likely storage location [fridge, freezer, pantry, counter]
+- purchase_date: an ISO date string (YYYY-MM-DD) representing WHEN the user acquired the item.
+  Pay very close attention to any temporal cues in the text such as "last year", "yesterday",
+  "3 days ago", "last week", "a month ago", "bought in January", "last Monday", etc.
+  Convert those relative expressions into an actual date based on today ({today}).
+  If no time information is given, default to today ({today}).
 
 Return JSON:
 {{
@@ -434,7 +442,8 @@ Return JSON:
       "quantity": 1,
       "unit": "item",
       "is_perishable": true,
-      "storage": "fridge"
+      "storage": "fridge",
+      "purchase_date": "YYYY-MM-DD"
     }}
   ],
   "unrecognized": ["anything said that doesn't seem to be a food item"]
