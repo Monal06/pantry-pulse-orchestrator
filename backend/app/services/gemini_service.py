@@ -99,6 +99,9 @@ For EACH food item you can identify, return a JSON object with these fields:
 - unit: unit of measure (e.g. "item", "bottle", "bag", "container", "bunch", "lb", "pack")
 - is_perishable: true/false
 - storage: where it appears to be stored - one of [fridge, freezer, pantry, counter]
+- bbox: bounding box of this item in the image as [x1, y1, x2, y2] where all values are NORMALISED 0.0-1.0
+  (x1,y1 = top-left corner, x2,y2 = bottom-right corner, relative to full image width/height).
+  If you cannot locate the item precisely, omit this field or set it to null.
 
 Also check for ANY visual signs of spoilage on visible items:
 - Mold (fuzzy patches, green/white/black spots)
