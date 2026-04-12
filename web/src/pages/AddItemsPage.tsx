@@ -39,7 +39,9 @@ export default function AddItemsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const modeMap: Record<string, number> = { fridge: 0, receipt: 1, barcode: 2, voice: 3, manual: 4 };
-  const [tab, setTab] = useState(modeMap[searchParams.get("mode") || "manual"] ?? 4);
+  const modeParam = searchParams.get("mode");
+  const isDirectMode = !!modeParam;
+  const [tab, setTab] = useState(modeMap[modeParam || "manual"] ?? 4);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [snackbar, setSnackbar] = useState("");
@@ -139,24 +141,43 @@ export default function AddItemsPage() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={800} sx={{ mb: 2 }}>Add Items</Typography>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Add Items</Typography>
+        {isDirectMode && (
+          <Button variant="outlined" onClick={() => navigate("/")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
+            Back
+          </Button>
+        )}
+      </Box>
 
-      <Tabs
-        value={tab}
-        onChange={(_, v) => { setTab(v); setResult(null); }}
-        variant="scrollable"
-        sx={{ mb: 3 }}
-      >
-        {TABS.map((t, i) => (
-          <Tab key={i} icon={t.icon} label={t.label} iconPosition="start" />
-        ))}
-      </Tabs>
+      {!isDirectMode && (
+        <Stack direction="row" spacing={1} sx={{ mb: 4, overflowX: "auto", pb: 1 }}>
+          {TABS.map((t, i) => (
+            <Chip
+              key={i}
+              label={t.label}
+              icon={t.icon}
+              onClick={() => { setTab(i); setResult(null); }}
+              sx={{
+                borderRadius: "24px", px: 1, py: 2.5,
+                bgcolor: tab === i ? "#0f172a" : "transparent",
+                color: tab === i ? "#ffffff" : "#475569",
+                border: tab === i ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                fontWeight: 600,
+                fontSize: "1rem",
+                "& .MuiChip-icon": { color: tab === i ? "#ffffff" : "inherit" },
+                "&:hover": { bgcolor: tab === i ? "#1e293b" : "#f1f5f9" }
+              }}
+            />
+          ))}
+        </Stack>
+      )}
 
       {tab === 0 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Scan Fridge or Cupboard</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Scan Fridge / Image Upload</Typography>
+            <Typography color="text.secondary" sx={{ mb: 4, fontSize: "1.1rem" }}>
               Upload a photo of your open fridge or cupboard. AI will identify food items and check for spoilage.
             </Typography>
             <Button
@@ -174,9 +195,9 @@ export default function AddItemsPage() {
 
       {tab === 1 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Scan Receipt</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Scan Receipt</Typography>
+            <Typography color="text.secondary" sx={{ mb: 4, fontSize: "1.1rem" }}>
               Upload a photo of your grocery receipt. AI will extract food items and add them to your pantry.
             </Typography>
             <Button
@@ -194,9 +215,9 @@ export default function AddItemsPage() {
 
       {tab === 2 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Barcode Lookup</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Barcode Lookup</Typography>
+            <Typography color="text.secondary" sx={{ mb: 4, fontSize: "1.1rem" }}>
               Enter a product barcode (EAN/UPC) to look it up in the Open Food Facts database.
             </Typography>
             <Stack direction="row" spacing={2} alignItems="flex-start">
@@ -221,9 +242,9 @@ export default function AddItemsPage() {
 
       {tab === 3 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Voice Input</Typography>
-            <Typography color="text.secondary" sx={{ mb: 3 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Voice Input</Typography>
+            <Typography color="text.secondary" sx={{ mb: 4, fontSize: "1.1rem" }}>
               Tap the microphone and say what you bought, e.g. <em>"I got milk, eggs, a bag of spinach, and two chicken breasts."</em>
             </Typography>
 
@@ -362,8 +383,8 @@ export default function AddItemsPage() {
 
       {tab === 4 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={700} gutterBottom>Add Manually</Typography>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Add Manually</Typography>
             <Stack spacing={2}>
               <TextField label="Item Name *" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
               <FormControl fullWidth>
