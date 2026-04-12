@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.models.inventory import (
     PantryItem,
@@ -10,6 +13,20 @@ from app.models.inventory import (
 )
 from app.models.waste import WasteEventType
 from app.services import inventory_service, waste_service
+
+
+class _ReceiptItem(BaseModel):
+    name: str
+    category: str = "other"
+    quantity: float = 1.0
+    unit: str = "item"
+    is_perishable: bool = True
+
+
+class _BulkReceiptAdd(BaseModel):
+    items: list[_ReceiptItem]
+    purchase_date: str = ""
+    storage: str = "fridge"
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -57,6 +74,39 @@ async def get_freeze_suggestions(user_id: str = Query(default=DEFAULT_USER)):
 async def add_item(item: PantryItemCreate, user_id: str = Query(default=DEFAULT_USER)):
     """Manually add a single item to the pantry."""
     return await inventory_service.add_item(user_id, item)
+
+
+@router.post("/bulk", response_model=list[PantryItem])
+async def add_items_bulk(
+    body: _BulkReceiptAdd,
+    user_id: str = Query(default=DEFAULT_USER),
+):
+    """Bulk-add items parsed from a receipt with a confirmed purchase date."""
+    try:
+        added_date = date.fromisoformat(body.purchase_date) if body.purchase_date else date.today()
+        if added_date > date.today():
+            added_date = date.today()
+    except ValueError:
+        added_date = date.today()
+
+    try:
+        storage = StorageLocation(body.storage)
+    except ValueError:
+        storage = StorageLocation.FRIDGE
+
+    to_create = [
+        PantryItemCreate(
+            name=item.name,
+            category=item.category,
+            quantity=item.quantity,
+            unit=item.unit,
+            storage=storage,
+            is_perishable=item.is_perishable,
+            added_date=added_date,
+        )
+        for item in body.items
+    ]
+    return await inventory_service.add_items_bulk(user_id, to_create)
 
 
 @router.put("/{item_id}", response_model=PantryItem)

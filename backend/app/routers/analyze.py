@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
 from app.models.inventory import PantryItemCreate, SpoilageReport, StorageLocation
-from app.services import gemini_service, barcode_service, inventory_service
+from app.services import gemini_service, barcode_service, inventory_service, receipt_fallback_service
 from app.routers.meals import _meal_history
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
@@ -66,13 +66,32 @@ async def analyze_receipt(
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
-    result = await gemini_service.analyze_receipt_photo(image_bytes, photo.content_type)
+
+    # Try Gemini first, then fall back to OCR parsing if Gemini errors.
+    used_fallback = False
+    try:
+        result = await gemini_service.analyze_receipt_photo(image_bytes, photo.content_type)
+    except Exception:
+        result = {"error": "Primary model failed"}
+
+    if "error" in result:
+        used_fallback = True
+        result = await receipt_fallback_service.analyze_receipt_photo(image_bytes, photo.content_type)
 
     if "error" in result:
         raise HTTPException(status_code=502, detail=result["error"])
 
     items_created = []
     if auto_add and "items" in result:
+        receipt_date = result.get("date", "")
+        try:
+            if receipt_date:
+                item_added_date = datetime.strptime(receipt_date, "%Y-%m-%d").date()
+            else:
+                item_added_date = date.today()
+        except (ValueError, TypeError):
+            item_added_date = date.today()
+
         for raw_item in result["items"]:
             item = PantryItemCreate(
                 name=raw_item.get("name", "Unknown"),
@@ -81,17 +100,19 @@ async def analyze_receipt(
                 unit=raw_item.get("unit", "item"),
                 storage=storage,
                 is_perishable=raw_item.get("is_perishable", True),
-                added_date=date.today(),
+                added_date=item_added_date,
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
 
     return {
         "items_detected": len(result.get("items", [])),
+        "parsed_items": result.get("items", []),
         "items_added": items_created,
         "store_name": result.get("store_name", ""),
         "receipt_date": result.get("date", ""),
         "description": result.get("description", ""),
+        "fallback_used": used_fallback,
     }
 
 

@@ -10,7 +10,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   analyzeFridgePhoto, analyzeReceipt, analyzeBarcode,
-  addManualItem, analyzeVoiceInput,
+  addManualItem, analyzeVoiceInput, confirmReceiptItems,
 } from "../api";
 
 const CATEGORIES = [
@@ -43,6 +43,7 @@ export default function AddItemsPage() {
   const [isPerishable, setIsPerishable] = useState(true);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [voiceText, setVoiceText] = useState("");
+  const [receiptDate, setReceiptDate] = useState("");
 
   const handleFileUpload = async (analyzeFunc: (file: File) => Promise<any>) => {
     const input = document.createElement("input");
@@ -63,6 +64,44 @@ export default function AddItemsPage() {
       }
     };
     input.click();
+  };
+
+  const handleReceiptUpload = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setLoading(true);
+      setResult(null);
+      setReceiptDate("");
+      try {
+        const data = await analyzeReceipt(file);
+        setResult(data);
+        setReceiptDate(data.receipt_date || "");
+      } catch (err: any) {
+        setSnackbar(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleConfirmReceiptItems = async () => {
+    if (!result?.parsed_items?.length) return;
+    setLoading(true);
+    try {
+      const finalDate = receiptDate || new Date().toISOString().split("T")[0];
+      const added = await confirmReceiptItems(result.parsed_items, finalDate, "fridge");
+      setResult({ ...result, items_added: added });
+      setSnackbar(`${added.length} items added to your pantry`);
+    } catch (e: any) {
+      setSnackbar(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBarcodeLookup = async () => {
@@ -162,7 +201,7 @@ export default function AddItemsPage() {
             <Button
               variant="contained"
               startIcon={<CloudUpload />}
-              onClick={() => handleFileUpload(analyzeReceipt)}
+              onClick={handleReceiptUpload}
               disabled={loading}
               size="large"
             >
@@ -279,8 +318,52 @@ export default function AddItemsPage() {
         <Card sx={{ mt: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={700} gutterBottom>Analysis Complete</Typography>
-            {result.items_added && (
+
+            {/* Receipt confirmation step: items parsed but not yet added */}
+            {tab === 1 && result.parsed_items?.length > 0 && !result.items_added?.length && (
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={{ mb: 1 }}>
+                  Found <strong>{result.parsed_items.length}</strong> item{result.parsed_items.length !== 1 ? "s" : ""}.
+                  {result.store_name ? ` Store: ${result.store_name}.` : ""}
+                </Typography>
+                <Box sx={{ mb: 2, pl: 1 }}>
+                  {result.parsed_items.map((item: any, i: number) => (
+                    <Typography key={i} variant="body2" color="text.secondary">• {item.name} ({item.category})</Typography>
+                  ))}
+                </Box>
+                <TextField
+                  label="Purchase Date"
+                  type="date"
+                  value={receiptDate}
+                  onChange={(e) => setReceiptDate(e.target.value)}
+                  inputProps={{ max: new Date().toISOString().split("T")[0] }}
+                  InputLabelProps={{ shrink: true }}
+                  helperText={
+                    result.receipt_date
+                      ? `Date found on receipt: ${result.receipt_date}`
+                      : "No date found on receipt — please enter it manually"
+                  }
+                  error={!receiptDate}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleConfirmReceiptItems}
+                  disabled={!receiptDate || loading}
+                  size="large"
+                >
+                  Add {result.parsed_items.length} items to Pantry
+                </Button>
+              </Box>
+            )}
+
+            {/* Normal result: items already added */}
+            {result.items_added?.length > 0 && (
               <Typography>{result.items_added.length} items added to your pantry</Typography>
+            )}
+            {tab === 1 && result.parsed_items?.length === 0 && (
+              <Typography color="text.secondary">No food items detected. Try a clearer photo.</Typography>
             )}
             {result.item_added && (
               <Typography>Added: {result.item_added.name}</Typography>
@@ -307,6 +390,22 @@ export default function AddItemsPage() {
             )}
             {result.description && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{result.description}</Typography>
+            )}
+            {result.extraction_source && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {result.extraction_source === "fallback_heuristic" ? (
+                  <>
+                    <Typography component="span" variant="body2" color="warning.main" fontWeight={600}>
+                      Extraction source: Fallback Parser
+                    </Typography>
+                    <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                      (AI failed, used heuristic analysis)
+                    </Typography>
+                  </>
+                ) : (
+                  `Extraction source: ${result.extraction_source}`
+                )}
+              </Typography>
             )}
             <Button variant="contained" onClick={() => navigate("/")} sx={{ mt: 2 }}>
               Back to Inventory

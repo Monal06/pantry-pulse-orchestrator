@@ -57,9 +57,21 @@ export async function analyzeFridgePhoto(file: File) {
 export async function analyzeReceipt(file: File) {
   const form = new FormData();
   form.append("photo", file);
-  return request("/analyze/receipt?auto_add=true", {
+  return request("/analyze/receipt?auto_add=false", {
     method: "POST",
     body: form,
+  });
+}
+
+export async function confirmReceiptItems(
+  items: any[],
+  purchaseDate: string,
+  storage: string = "fridge",
+) {
+  return request("/inventory/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items, purchase_date: purchaseDate, storage }),
   });
 }
 
