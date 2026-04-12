@@ -59,6 +59,7 @@ export default function AddItemsPage() {
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
   );
+  const [receiptDate, setReceiptDate] = useState("");
 
   // Voice recorder hook
   const voice = useVoiceRecorder();
@@ -426,7 +427,7 @@ export default function AddItemsPage() {
               <Button
                 variant="outlined"
                 startIcon={<CloudUpload />}
-                onClick={() => handleFileUpload(analyzeReceipt)}
+                onClick={handleReceiptUpload}
                 disabled={loading}
                 size="large"
                 sx={{ flex: 1 }}
@@ -749,6 +750,17 @@ export default function AddItemsPage() {
               {/* Results content */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>Analysis Complete ✅</Typography>
+                {result.parsed_items?.length > 0 && !result.items_added && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography sx={{ mb: 0.5 }}>{result.parsed_items.length} items found on receipt</Typography>
+                    {receiptDate && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Receipt date: {receiptDate}</Typography>
+                    )}
+                    <Button variant="contained" onClick={handleConfirmReceiptItems} disabled={loading} sx={{ mt: 1 }}>
+                      Add {result.parsed_items.length} Items to Pantry
+                    </Button>
+                  </Box>
+                )}
                 {result.items_added && (
                   <Typography>{result.items_added.length} items added to your pantry</Typography>
                 )}
