@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import random
+import itertools
 from typing import Any
+from datetime import datetime, timedelta
 
 from google import genai
 from google.genai import types
@@ -14,13 +16,78 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 _client: genai.Client | None = None
+_key_iterator: itertools.cycle | None = None
+_exhausted_keys: dict[str, datetime] = {}  # Track exhausted keys with timestamp
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """Return True if the exception is a quota/daily limit error."""
+    err = str(exc).lower()
+    return any(tok in err for tok in (
+        "quota", "daily limit", "exceeded", "quota_exceeded",
+        "insufficient quota", "billing", "free tier",
+    ))
+
+
+def _get_next_gemini_key() -> str:
+    """Rotate through multiple Gemini API keys, skipping exhausted ones."""
+    global _key_iterator, _exhausted_keys
+    settings = get_settings()
+    keys = settings.get_all_gemini_keys()
+
+    if not keys:
+        raise ValueError("No Gemini API keys configured. Set GEMINI_API_KEY or GEMINI_API_KEYS")
+
+    # Clean up exhausted keys that have been waiting for 24 hours (quota resets daily)
+    now = datetime.now()
+    _exhausted_keys = {
+        key: timestamp
+        for key, timestamp in _exhausted_keys.items()
+        if now - timestamp < timedelta(hours=24)
+    }
+
+    # Filter out exhausted keys
+    available_keys = [k for k in keys if k not in _exhausted_keys]
+
+    if not available_keys:
+        logger.warning(
+            f"All {len(keys)} Gemini API keys are exhausted. "
+            f"Quota resets in ~{24 - (now.hour)} hours."
+        )
+        # Return any key anyway - might work if quota just reset
+        available_keys = keys
+
+    # If multiple keys, rotate through available ones
+    if len(available_keys) > 1:
+        if _key_iterator is None or set(_exhausted_keys.keys()):
+            # Recreate iterator with only available keys
+            _key_iterator = itertools.cycle(available_keys)
+        key = next(_key_iterator)
+        logger.debug(
+            f"Using Gemini key rotation "
+            f"(available: {len(available_keys)}/{len(keys)} keys)"
+        )
+        return key
+
+    # Single available key
+    return available_keys[0]
+
+
+def _mark_key_exhausted(key: str) -> None:
+    """Mark a key as exhausted so it's skipped in rotation."""
+    global _exhausted_keys
+    _exhausted_keys[key] = datetime.now()
+    logger.warning(
+        f"Gemini API key exhausted (daily quota). "
+        f"Total exhausted: {len(_exhausted_keys)}. "
+        f"This key will be retried in ~24 hours."
+    )
 
 
 def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=get_settings().gemini_api_key)
-    return _client
+    """Get Gemini client with rotated API key."""
+    # Don't cache client - create fresh one with rotated key
+    return genai.Client(api_key=_get_next_gemini_key())
 
 
 def _get_models() -> list[str]:
@@ -44,14 +111,18 @@ async def _generate_with_retry(contents: list) -> str:
     times with exponential backoff + jitter.  If every attempt on a model
     returns a 503/429/overload error, fall back to the next model.
     """
-    client = _get_client()
     models = _get_models()
     max_retries = get_settings().gemini_max_retries
     last_exc: Exception | None = None
+    current_key = None
 
     for model in models:
         for attempt in range(1, max_retries + 1):
             try:
+                # Get fresh client with rotated key for each attempt
+                client = _get_client()
+                current_key = _get_next_gemini_key()  # Track which key we're using
+
                 response = client.models.generate_content(
                     model=model,
                     contents=contents,
@@ -63,6 +134,15 @@ async def _generate_with_retry(contents: list) -> str:
                 return response.text
             except Exception as exc:
                 last_exc = exc
+
+                # Check if this is a quota/daily limit error
+                if _is_quota_error(exc):
+                    logger.error(f"Gemini API key hit daily quota limit: {exc}")
+                    if current_key:
+                        _mark_key_exhausted(current_key)
+                    # Don't retry with this key - move to next model/key immediately
+                    break
+
                 if not _is_overload_error(exc):
                     raise  # not transient — propagate immediately
 
@@ -79,8 +159,8 @@ async def _generate_with_retry(contents: list) -> str:
         )
 
     raise RuntimeError(
-        "All Gemini models are currently unavailable after retries. "
-        "Please try again in a minute."
+        "All Gemini models and API keys are currently unavailable. "
+        "Please try again in a minute or add more API keys."
     ) from last_exc
 
 

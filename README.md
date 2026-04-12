@@ -101,6 +101,14 @@ freshsave/
 - Node.js 18+
 - A free [Google AI Studio](https://aistudio.google.com) API key
 
+### Quick Deploy (For Judges)
+
+**Want to demo the app instantly?** See [DEPLOYMENT.md](./DEPLOYMENT.md) for one-click deployment to free hosting platforms like Render, Railway, or Vercel.
+
+Live demo will be available at: `https://pantry-pulse-web.onrender.com` (once deployed)
+
+### Local Development Setup
+
 ### Backend Setup
 
 ```bash
