@@ -7,6 +7,7 @@ from app.routers import (
     waste, profile, community, household,
     recipes, notifications, exit_strategy,
 )
+from app.config import get_settings
 
 
 @asynccontextmanager
@@ -15,15 +16,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FreshSave API",
+    title="Pantry Pulse API",
     description="AI-powered food waste reduction. Track inventory, get freshness scores, meal suggestions, smart shopping lists, community sharing, and more.",
     version="0.2.0",
     lifespan=lifespan,
 )
 
+settings = get_settings()
+cors_origins = settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,4 +48,8 @@ app.include_router(exit_strategy.router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "freshsave-api"}
+    return {"status": "healthy", "service": "pantry-pulse-api"}
+
+@app.get("/api/health")
+async def api_health():
+    return {"status": "healthy", "service": "pantry-pulse-api", "version": "0.2.0"}

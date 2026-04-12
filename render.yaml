@@ -1,0 +1,32 @@
+services:
+  # Backend API
+  - type: web
+    name: pantry-pulse-api
+    runtime: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /api/health
+
+  # Frontend Static Site
+  - type: web
+    name: pantry-pulse-web
+    runtime: node
+    buildCommand: "cd web && npm install && npm run build"
+    staticPublishPath: ./web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://pantry-pulse-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://pantry-pulse-api.onrender.com/api/*
+
