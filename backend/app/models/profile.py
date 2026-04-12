@@ -16,6 +16,7 @@ class DietaryProfile(BaseModel):
     dislikes: list[str] = []
     cuisine_preferences: list[str] = []
     household_size: int = 1
+    fitness_goals: list[str] = []  # e.g., "hypertrophy", "fat loss", "endurance", "maintenance"
 
     def to_prompt_string(self) -> str:
         restrictions: list[str] = []
@@ -40,7 +41,8 @@ class DietaryProfile(BaseModel):
         if self.dislikes:
             restrictions.append(f"dislikes: {', '.join(self.dislikes)}")
 
-        if not restrictions:
-            return "No dietary restrictions."
-
-        return "Dietary restrictions: " + "; ".join(restrictions)
+        diet_str = "Dietary restrictions: " + "; ".join(restrictions) if restrictions else "No dietary restrictions."
+        
+        goals_str = "Fitness goals: " + ", ".join(self.fitness_goals) if self.fitness_goals else "No specific fitness goals."
+        
+        return f"{diet_str}\n{goals_str}"

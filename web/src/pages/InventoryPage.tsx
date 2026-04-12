@@ -5,11 +5,36 @@ import {
   Tooltip, Stack,
 } from "@mui/material";
 import {
-  Delete, Restaurant, AcUnit, Refresh,
+  Delete, Restaurant, AcUnit, Refresh, Schedule,
+  CameraAlt, Receipt, QrCodeScanner, Mic, Edit,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { getInventory, deleteItem, useItem, freezeItem } from "../api";
 import { freshnessColor, freshnessLabel } from "../theme";
+
+const ActionCard = ({ title, color, icon, onClick }: any) => (
+  <Button
+    onClick={onClick}
+    sx={{
+      bgcolor: color,
+      borderRadius: "24px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      width: { xs: "100%", sm: "160px" },
+      height: "160px",
+      textTransform: "none",
+      color: "#0f172a",
+      boxShadow: "none",
+      "&:hover": { bgcolor: color, opacity: 0.9, boxShadow: "none" }
+    }}
+  >
+    <Box sx={{ mb: 1, "& svg": { fontSize: 40 } }}>{icon}</Box>
+    <Typography fontWeight={700} fontSize="0.95rem">{title}</Typography>
+    <Typography variant="caption" color="text.secondary">Get Started</Typography>
+  </Button>
+);
 
 type FilterType = "all" | "good" | "use_soon" | "critical";
 
@@ -78,10 +103,14 @@ export default function InventoryPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h5" fontWeight={800}>My Pantry</Typography>
+        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>My Pantry</Typography>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" startIcon={<Refresh />} onClick={loadItems}>Refresh</Button>
-          <Button variant="contained" onClick={() => navigate("/add-items")}>+ Add Items</Button>
+          <IconButton onClick={loadItems} sx={{ border: "1px solid #cbd5e1", borderRadius: "12px", width: 44, height: 44 }}>
+            <Refresh />
+          </IconButton>
+          <Button variant="contained" onClick={() => navigate("/add-items")} sx={{ bgcolor: "#111827", color: "white", borderRadius: "24px", px: 3, "&:hover": { bgcolor: "#000" } }}>
+            + Add Items
+          </Button>
         </Stack>
       </Box>
 
@@ -109,26 +138,44 @@ export default function InventoryPage() {
         </Card>
       )}
 
-      <ToggleButtonGroup
-        value={filter}
-        exclusive
-        onChange={(_, v) => v && setFilter(v)}
-        size="small"
-        sx={{ mb: 2 }}
-      >
-        <ToggleButton value="all">All ({items.length})</ToggleButton>
-        <ToggleButton value="good">Fresh</ToggleButton>
-        <ToggleButton value="use_soon">Use Soon</ToggleButton>
-        <ToggleButton value="critical">Critical</ToggleButton>
-      </ToggleButtonGroup>
+      <Stack direction="row" spacing={1} sx={{ mb: 4, justifyContent: { xs: "flex-start", md: "flex-end" }, overflowX: "auto", pb: 1 }}>
+        {[
+          { id: "all", label: `All (${items.length})` },
+          { id: "good", label: "Fresh" },
+          { id: "use_soon", label: "Use Soon" },
+          { id: "critical", label: "Critical" }
+        ].map((f) => (
+          <Chip 
+            key={f.id}
+            label={f.label}
+            onClick={() => setFilter(f.id as FilterType)}
+            sx={{ 
+              borderRadius: "24px", px: 1, py: 2.5,
+              bgcolor: filter === f.id ? "#e2e8f0" : "transparent",
+              border: "1px solid #cbd5e1",
+              fontWeight: 600,
+              fontSize: "1rem",
+              color: filter === f.id ? "#0f172a" : "#475569",
+              "&:hover": { bgcolor: "#f1f5f9" }
+            }}
+          />
+        ))}
+      </Stack>
 
       {filtered.length === 0 && !loading && (
-        <Box sx={{ textAlign: "center", py: 8 }}>
-          <Typography variant="h3" sx={{ mb: 1 }}>🥗</Typography>
-          <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>Your pantry is empty</Typography>
-          <Typography color="text.secondary">
-            Click "+ Add Items" to add items by photo, receipt, barcode, voice, or manually
-          </Typography>
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <Box sx={{ maxWidth: 400, mx: "auto", mb: 4, display: "flex", justifyContent: "center" }}>
+            <img src="/assets/3d-pantry-placeholder.png" alt="pantry" style={{ maxWidth: "100%", borderRadius: "24px" }} />
+          </Box>
+          <Typography variant="h4" fontWeight={800} sx={{ mb: 6, letterSpacing: "-0.02em" }}>Your pantry is empty</Typography>
+          
+          <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+            <ActionCard title="Image Upload" color="#d1fae5" icon={<CameraAlt/>} onClick={() => navigate("/add-items?mode=fridge")} />
+            <ActionCard title="Receipt Upload" color="#ccfbf1" icon={<Receipt/>} onClick={() => navigate("/add-items?mode=receipt")} />
+            <ActionCard title="Barcode Scan" color="#ffedd5" icon={<QrCodeScanner/>} onClick={() => navigate("/add-items?mode=barcode")} />
+            <ActionCard title="Voice Record" color="#ffe4e6" icon={<Mic/>} onClick={() => navigate("/add-items?mode=voice")} />
+            <ActionCard title="Manual Entry" color="#f3e8ff" icon={<Edit/>} onClick={() => navigate("/add-items?mode=manual")} />
+          </Stack>
         </Box>
       )}
 
@@ -156,6 +203,31 @@ export default function InventoryPage() {
                   </Box>
                 )}
               </Box>
+
+              {/* Expires on label */}
+              {item.is_perishable && item.expires_on && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 1 }}>
+                  <Schedule sx={{ fontSize: 14, color: item.days_remaining != null && item.days_remaining <= 2 ? "error.main" : item.days_remaining != null && item.days_remaining <= 5 ? "warning.main" : "text.secondary" }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    sx={{
+                      color: item.days_remaining != null && item.days_remaining <= 2 ? "error.main"
+                        : item.days_remaining != null && item.days_remaining <= 5 ? "warning.main"
+                        : "text.secondary",
+                    }}
+                  >
+                    {item.days_remaining === 0
+                      ? "Expired"
+                      : item.days_remaining === 1
+                        ? "Expires tomorrow"
+                        : `Expires in ${item.days_remaining} days`}
+                    {" · "}
+                    {new Date(item.expires_on).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </Typography>
+                </Box>
+              )}
+
               {item.is_perishable && (
                 <LinearProgress
                   variant="determinate"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -21,7 +22,7 @@ class CommunityListing(BaseModel):
     description: str = ""
     pickup_location: str = ""
     status: ListingStatus = ListingStatus.AVAILABLE
-    claimed_by: str | None = None
+    claimed_by: Optional[str] = None
     created_at: str = ""
     expires_at: str = ""
 

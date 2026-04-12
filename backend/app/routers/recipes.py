@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.services import recipe_service
+from app.services import recipe_service, gemini_service
+from app.models.biometric import BiometricData
+from app.models.profile import DietaryProfile
+from pydantic import BaseModel
+from typing import Any
+
+class MetabolicPlanRequest(BaseModel):
+    inventory_items: list[dict]
+    biometrics: BiometricData
+    profile: DietaryProfile
+
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -61,3 +71,17 @@ async def delete_recipe(recipe_id: str, user_id: str = Query(default=DEFAULT_USE
     if not deleted:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"status": "deleted"}
+
+
+@router.post("/metabolic/plan")
+async def generate_metabolic_recipe_plan(request: MetabolicPlanRequest):
+    """Generate a highly optimized biometric-driven recipe."""
+    try:
+        recipe_suggestion = await gemini_service.generate_metabolic_recipe(
+            inventory_items=request.inventory_items,
+            biometrics=request.biometrics.model_dump(),
+            profile_data=request.profile.to_prompt_string()
+        )
+        return recipe_suggestion
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

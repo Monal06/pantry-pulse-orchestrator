@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -42,7 +43,7 @@ class WasteEvent(BaseModel):
     estimated_value: float = 0.0
     co2_saved_kg: float = 0.0
     date: date
-    created_at: datetime | None = None
+    created_at: Optional[datetime] = None
 
 
 class WasteStats(BaseModel):

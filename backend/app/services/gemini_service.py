@@ -100,6 +100,9 @@ For EACH food item you can identify, return a JSON object with these fields:
 - unit: unit of measure (e.g. "item", "bottle", "bag", "container", "bunch", "lb", "pack")
 - is_perishable: true/false
 - storage: where it appears to be stored - one of [fridge, freezer, pantry, counter]
+- bbox: bounding box of this item in the image as [x1, y1, x2, y2] where all values are NORMALISED 0.0-1.0
+  (x1,y1 = top-left corner, x2,y2 = bottom-right corner, relative to full image width/height).
+  If you cannot locate the item precisely, omit this field or set it to null.
 
 Also check for ANY visual signs of spoilage on visible items:
 - Mold (fuzzy patches, green/white/black spots)
@@ -132,15 +135,29 @@ Return ONLY valid JSON, no markdown fences."""
 
 
 async def analyze_receipt_photo(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
-    """Extract food items from a receipt photo with Gemini, fallback to heuristic parser on failure."""
-    prompt = """You are a grocery receipt parser. Analyze this receipt photo and extract all FOOD items.
+    """Extract food items from a receipt photo."""
+    prompt = """You are a grocery receipt parser. Analyze this receipt photo and extract ALL FOOD items including pet food.
 
 For each food item, return:
 - name: the food item name (clean it up from receipt abbreviations)
 - category: one of [dairy, meat, seafood, fruit, vegetable, bread, eggs, leftover, condiment, canned, dry_goods, beverage, frozen, other]
 - quantity: quantity purchased (number, default 1)
-- unit: unit of measure (e.g. "item", "lb", "oz", "gallon", "pack")
+- unit: unit of measure (e.g. "item", "lb", "oz", "gallon", "pack", "bag", "can", "box")
 - is_perishable: true/false
+
+IMPORTANT CATEGORIZATION RULES:
+- Pet food containing meat/chicken → use "meat" category 
+- Pet food containing fish → use "seafood" category
+- Dry pet food, pet treats → use "dry_goods" category
+- Canned pet food → use "canned" category
+- Fresh pet food (refrigerated) → use appropriate category (meat/seafood)
+- All pet food should be marked as perishable: true (unless it's clearly shelf-stable dry food)
+
+Examples:
+- "Harrington Senior Chicken & Rice" → category: "meat", is_perishable: true
+- "Dog food wet chicken" → category: "meat", is_perishable: true  
+- "Cat food tuna" → category: "seafood", is_perishable: true
+- "Dry dog kibble" → category: "dry_goods", is_perishable: false
 
 Skip non-food items (bags, tax, discounts, cleaning products, etc).
 
@@ -210,10 +227,10 @@ async def suggest_meals(
     dietary_prompt: str = "No dietary restrictions.",
     household_size: int = 1,
 ) -> list[dict]:
-    """Generate meal suggestions prioritizing items by freshness, respecting dietary restrictions."""
-    good_items = [i for i in inventory_items if i.get("freshness_score", 100) >= 70]
-    use_soon_items = [i for i in inventory_items if 50 <= i.get("freshness_score", 100) < 70]
-    critical_items = [i for i in inventory_items if i.get("freshness_score", 100) < 50]
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
+    good_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 70]
+    use_soon_items = [i for i in safe_inventory if 50 <= i.get("freshness_score", 100) < 70]
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
 
     inventory_summary = ""
     if critical_items:
@@ -321,8 +338,9 @@ async def generate_weekly_meal_plan(
     household_size: int = 1,
 ) -> dict[str, Any]:
     """Generate a 7-day meal plan projecting freshness forward."""
+    safe_inventory = [item for item in inventory_items if not item.get("visual_hazard", False)]
     items_summary = ""
-    for item in inventory_items:
+    for item in safe_inventory:
         items_summary += (
             f"  - {item['name']} (category: {item['category']}, freshness: {item.get('freshness_score', 100)}%, "
             f"qty: {item['quantity']} {item['unit']}, storage: {item.get('storage', 'fridge')})\n"
@@ -424,9 +442,12 @@ Return ONLY valid JSON, no markdown fences."""
 
 async def parse_voice_input(text: str) -> dict[str, Any]:
     """Parse natural language voice input into structured food items."""
+    today = __import__("datetime").date.today().isoformat()
     prompt = f"""You are a food item parser. The user said the following while adding items to their pantry:
 
 "{text}"
+
+Today's date is {today}.
 
 Extract each food item mentioned. For each, determine:
 - name: the food item
@@ -435,6 +456,39 @@ Extract each food item mentioned. For each, determine:
 - unit: unit of measure (item, lb, oz, gallon, pack, bunch, bag, bottle, can, box, dozen)
 - is_perishable: true/false
 - storage: most likely storage location [fridge, freezer, pantry, counter]
+- purchase_date: an ISO date string (YYYY-MM-DD) representing WHEN the user acquired the item.
+
+IMPORTANT CATEGORIZATION RULES:
+- Pet food containing meat/chicken → use "meat" category 
+- Pet food containing fish → use "seafood" category
+- Dry pet food, pet treats → use "dry_goods" category
+- Canned pet food → use "canned" category
+- Fresh pet food (refrigerated) → use appropriate category (meat/seafood)
+
+CRITICAL: Pay attention to BOTH purchase timing AND expiry timing mentioned in the text:
+  
+  For PURCHASE timing ("bought yesterday", "got last week", etc.):
+  Convert those relative expressions into an actual purchase date based on today ({today}).
+  
+  For EXPIRY timing ("expires in 3 days", "expiring tomorrow", "goes bad in a week", "use by Friday", etc.):
+  Work backwards from the expiry date to estimate when the item was likely purchased.
+  Use these decay rates per day for different food categories in fridge storage:
+  - meat: 8 points/day (so if expires in 3 days with ~75 freshness, bought ~3 days ago)
+  - dairy: 5 points/day
+  - fruit: 3.5 points/day  
+  - vegetable: 3 points/day
+  - seafood: 10 points/day
+  - bread: 4 points/day
+  - eggs: 2 points/day
+  - other: 2 points/day
+  
+  Example: "chicken breast expiring in 3 days" = meat category, decay 8/day
+  If expiring in 3 days, freshness should be ~75 (use within 3 days)
+  Working back: 100 - (days_since_purchase * 8) = 75
+  So: days_since_purchase = (100-75)/8 = ~3 days ago
+  Purchase date = today - 3 days
+  
+  If no timing information is given, default to today ({today}).
 
 Return JSON:
 {{
@@ -445,10 +499,76 @@ Return JSON:
       "quantity": 1,
       "unit": "item",
       "is_perishable": true,
-      "storage": "fridge"
+      "storage": "fridge",
+      "purchase_date": "YYYY-MM-DD"
     }}
   ],
   "unrecognized": ["anything said that doesn't seem to be a food item"]
+}}
+
+Return ONLY valid JSON, no markdown fences."""
+
+    text = await _generate_with_retry([types.Part.from_text(text=prompt)])
+    return _parse_json_response(text)
+
+async def generate_metabolic_recipe(
+    inventory_items: list[dict],
+    biometrics: dict[str, Any],
+    profile_data: str,
+) -> dict[str, Any]:
+    """
+    Constraint-Driven RAG for recipes based on:
+      1. Inventory freshness constraints.
+      2. Biometric state of the user.
+      3. User profile goals/restrictions.
+    """
+    # Separate inventory by freshness constraint and exclude items with visual hazards
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
+    stable_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 50]
+    
+    inv_summary = "CRITICAL (Must Use):\n"
+    for i in critical_items:
+        inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
+    inv_summary += "\nSTABLE (Can Use):\n"
+    for i in stable_items:
+        inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
+
+    prompt = f"""You are the 'Metabolic Guard', an elite constraint-driven cooking AI.
+Your goal is to suggest THREE highly optimized meal recipes that perfectly balance the user's BIOLOGICAL NEEDS with their INVENTORY CONSTRAINTS.
+
+USER PROFILE & DIET GOALS:
+{profile_data}
+
+CURRENT BIOMETRIC STATE:
+{json.dumps(biometrics, indent=2)}
+
+INVENTORY:
+{inv_summary}
+
+RULES:
+1. BIOMETRIC ALIGNMENT: 
+   - If Sleep/Readiness is low or Stress is high, use ingredients rich in recovery nutrients (magnesium, complex carbs, antioxidants).
+   - If Steps are high, provide sufficient protein/carbs for recovery.
+2. CIRCULAR OPTIMIZATION:
+   - You MUST utilize at least some items from the "CRITICAL" inventory list to prevent food waste.
+   - You may use "STABLE" items to round out the nutritional profile.
+3. STRICT DIETARY ADHERENCE: Never violate the user's dietary restrictions or fitness goals.
+4. VARIED SUGGESTIONS: Ensure the three recipes offer different flavors or types of meals (e.g. one breakfast-style, one lunch, one dinner, or different cuisines).
+
+Return JSON in this EXACT format:
+{{
+  "recipes": [
+    {{
+      "name": "Recipe Name",
+      "description": "Short description of why this recipe is perfect for their biometric state",
+      "ingredients_used": ["..."],
+      "instructions": ["..."],
+      "prep_time_minutes": 25,
+      "metabolic_alignment_score": 95,
+      "justification": "Detailed explanation of how this targets their specific biometric needs."
+    }}
+  ]
 }}
 
 Return ONLY valid JSON, no markdown fences."""

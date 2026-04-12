@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -41,11 +42,37 @@ def get_decay_rate(category: str, storage: str) -> float:
     return rates.get(storage, 3.0)
 
 
-def compute_freshness(added_date: date, category: str, storage: str) -> float:
-    days_elapsed = (date.today() - added_date).days
+def compute_freshness(added_date: date, category: str, storage: str, purchase_date: Optional[date] = None) -> float:
+    # Use actual purchase date if known, otherwise use added_date
+    # This handles case where user buys Monday but adds to system Friday
+    age_reference = purchase_date if purchase_date else added_date
+    days_elapsed = (date.today() - age_reference).days
     decay = get_decay_rate(category, storage)
     freshness = max(0.0, 100.0 - days_elapsed * decay)
     return round(freshness, 1)
+
+
+def compute_expiry(category: str, storage: str, purchase_date: Optional[date] = None, added_date: Optional[date] = None) -> tuple[Optional[date], Optional[int]]:
+    """
+    Compute the estimated expiry date and days remaining for a food item.
+
+    Uses the decay rate to determine when freshness reaches 0 (inedible).
+    Returns (expires_on_date, days_remaining) or (None, None) for non-decaying items.
+    """
+    decay = get_decay_rate(category, storage)
+    if decay <= 0:
+        return None, None  # non-perishable / negligible decay
+
+    age_reference = purchase_date if purchase_date else (added_date if added_date else date.today())
+
+    # Total shelf life in days: freshness goes from 100 → 0 at `decay` points/day
+    total_shelf_life_days = 100.0 / decay
+    expires_on = age_reference + timedelta(days=total_shelf_life_days)
+
+    days_remaining = (expires_on - date.today()).days
+    days_remaining = max(0, days_remaining)
+
+    return expires_on, days_remaining
 
 
 def freshness_category(score: float) -> FreshnessCategory:
@@ -63,33 +90,42 @@ class PantryItemBase(BaseModel):
     unit: str = "item"
     storage: StorageLocation = StorageLocation.FRIDGE
     is_perishable: bool = True
-    barcode: str | None = None
-    notes: str | None = None
-    price: float | None = None
+    barcode: Optional[str] = None
+    notes: Optional[str] = None
+    price: Optional[float] = None
+    visual_hazard: bool = False
+    ai_freshness_score: Optional[float] = None
 
 
 class PantryItemCreate(PantryItemBase):
     added_date: date = Field(default_factory=date.today)
+    purchase_date: Optional[date] = None
 
 
 class PantryItemUpdate(BaseModel):
-    name: str | None = None
-    category: str | None = None
-    quantity: float | None = None
-    unit: str | None = None
-    storage: StorageLocation | None = None
-    is_perishable: bool | None = None
-    notes: str | None = None
-    price: float | None = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    storage: Optional[StorageLocation] = None
+    is_perishable: Optional[bool] = None
+    notes: Optional[str] = None
+    price: Optional[float] = None
+    visual_hazard: Optional[bool] = None
+    ai_freshness_score: Optional[float] = None
 
 
 class PantryItem(PantryItemBase):
     id: str
     user_id: str
     added_date: date
+    purchase_date: Optional[date] = None
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
-    created_at: datetime | None = None
+    visual_hazard: bool = False
+    expires_on: Optional[date] = None
+    days_remaining: Optional[int] = None
+    created_at: Optional[datetime] = None
 
     @classmethod
     def from_db_row(cls, row: dict) -> PantryItem:
@@ -99,8 +135,27 @@ class PantryItem(PantryItemBase):
         if isinstance(added, str):
             added = date.fromisoformat(added)
 
+        # Parse purchase_date if provided
+        purchase = row.get("purchase_date")
+        if purchase and isinstance(purchase, str):
+            purchase = date.fromisoformat(purchase)
+
         is_perishable = row.get("is_perishable", True)
-        score = compute_freshness(added, category, storage) if is_perishable else 100.0
+
+        # Use AI freshness score if available, otherwise compute standard decay
+        if row.get("ai_freshness_score") is not None:
+            score = float(row["ai_freshness_score"])
+        else:
+            score = compute_freshness(added, category, storage, purchase) if is_perishable else 100.0
+
+        visual_hazard = row.get("visual_hazard", False)
+        
+        # Hard cap freshness to zero for chemically/visually hazardous ingredients
+        if visual_hazard:
+            score = 0.0
+
+        # Compute expiry date
+        exp_date, days_left = compute_expiry(category, storage, purchase, added) if is_perishable else (None, None)
 
         return cls(
             id=row["id"],
@@ -115,8 +170,13 @@ class PantryItem(PantryItemBase):
             notes=row.get("notes"),
             price=row.get("price"),
             added_date=added,
+            purchase_date=purchase,
+            visual_hazard=visual_hazard,
+            ai_freshness_score=row.get("ai_freshness_score"),
             freshness_score=score,
             freshness_status=freshness_category(score),
+            expires_on=exp_date,
+            days_remaining=days_left,
             created_at=row.get("created_at"),
         )
 

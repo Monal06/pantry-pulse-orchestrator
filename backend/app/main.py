@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import (
     inventory, analyze, meals, shopping,
     waste, profile, community, household,
-    recipes, notifications,
+    recipes, notifications, exit_strategy,
 )
 
 
@@ -39,6 +39,7 @@ app.include_router(community.router, prefix="/api")
 app.include_router(household.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(exit_strategy.router, prefix="/api")
 
 
 @app.get("/health")
