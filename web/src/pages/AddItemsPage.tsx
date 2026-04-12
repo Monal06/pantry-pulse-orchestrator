@@ -750,18 +750,33 @@ export default function AddItemsPage() {
               {/* Results content */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>Analysis Complete ✅</Typography>
-                {result.parsed_items?.length > 0 && !result.items_added && (
+                {result.parsed_items?.length > 0 && !(result.items_added?.length > 0) && (
                   <Box sx={{ mb: 2 }}>
-                    <Typography sx={{ mb: 0.5 }}>{result.parsed_items.length} items found on receipt</Typography>
-                    {receiptDate && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Receipt date: {receiptDate}</Typography>
+                    <Typography sx={{ mb: 1 }}>{result.parsed_items.length} items found on receipt</Typography>
+                    {receiptDate ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Receipt date: {receiptDate}
+                      </Typography>
+                    ) : (
+                      <Box sx={{ pt: 1, border: "1px solid #e0e0e0", p: 2, borderRadius: 1, bgcolor: "#fafafa", mb: 1.5 }}>
+                        <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>📅 When was this purchased?</Typography>
+                        <TextField
+                          type="date"
+                          value={receiptDate}
+                          onChange={(e) => setReceiptDate(e.target.value)}
+                          fullWidth
+                          size="small"
+                          helperText="Date not found on receipt. Defaults to today if left blank."
+                          inputProps={{ max: new Date().toISOString().split("T")[0] }}
+                        />
+                      </Box>
                     )}
                     <Button variant="contained" onClick={handleConfirmReceiptItems} disabled={loading} sx={{ mt: 1 }}>
                       Add {result.parsed_items.length} Items to Pantry
                     </Button>
                   </Box>
                 )}
-                {result.items_added && (
+                {result.items_added?.length > 0 && (
                   <Typography>{result.items_added.length} items added to your pantry</Typography>
                 )}
                 {result.item_added && (

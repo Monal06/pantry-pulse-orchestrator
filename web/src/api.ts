@@ -40,6 +40,10 @@ export async function deleteItem(itemId: string) {
   return request(`/inventory/${itemId}`, { method: "DELETE" });
 }
 
+export async function cleanupInventory(): Promise<{ removed_noise: number; removed_duplicates: number; total_cleaned: number }> {
+  return request("/inventory/cleanup", { method: "POST" });
+}
+
 export async function useItem(itemId: string, quantity: number) {
   return request(`/inventory/${itemId}/use?quantity=${quantity}`, {
     method: "POST",

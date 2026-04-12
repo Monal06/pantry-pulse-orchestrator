@@ -17,19 +17,21 @@ NON_FOOD_KEYWORDS = {
     "includes", "points", "earned", "reward", "loyalty", "subtotal",
 }
 
+# Categories listed in priority order — first matching category wins.
+# Keep dairy before fruit so "yogurt berry" resolves to dairy, not fruit.
 CATEGORY_KEYWORDS: dict[str, set[str]] = {
-    "dairy": {"milk", "cheese", "yogurt", "butter", "cream"},
-    "meat": {"beef", "chicken", "pork", "turkey", "bacon", "ham", "sausage"},
+    "dairy": {"milk", "cheese", "yogurt", "yoghurt", "yog", "butter", "cream", "almond milk"},
+    "eggs": {"egg", "eggs"},
+    "meat": {"beef", "chicken", "pork", "turkey", "bacon", "ham", "sausage", "mince", "steak"},
     "seafood": {"salmon", "tuna", "shrimp", "fish", "cod", "tilapia"},
     "fruit": {"apple", "banana", "orange", "grape", "berry", "avocado", "lemon", "lime", "mandarin", "citrus", "grapefruit", "tangerine"},
     "vegetable": {"lettuce", "spinach", "tomato", "onion", "carrot", "broccoli", "pepper", "cucumber"},
-    "bread": {"bread", "bagel", "bun", "tortilla", "roll"},
-    "eggs": {"egg", "eggs"},
+    "bread": {"bread", "bagel", "bun", "tortilla"},
     "condiment": {"ketchup", "mustard", "mayo", "sauce", "dressing"},
-    "canned": {"canned", "can", "beans", "soup"},
-    "dry_goods": {"rice", "pasta", "flour", "oats", "cereal", "lentil"},
-    "beverage": {"juice", "soda", "water", "coffee", "tea"},
-    "frozen": {"frozen", "ice cream"},
+    "canned": {"canned", "beans", "soup", "tinned"},
+    "dry_goods": {"rice", "pasta", "penne", "spaghetti", "flour", "oats", "oat", "cereal", "lentil", "noodle"},
+    "beverage": {"juice", "soda", "water", "coffee", "tea", "uht"},
+    "frozen": {"frozen"},
 }
 
 NON_PERISHABLE_CATEGORIES = {"canned", "dry_goods", "condiment"}
@@ -115,10 +117,18 @@ def _parse_quantity(line: str) -> tuple[float, str]:
     return 1.0, "item"
 
 
+# Pre-compile word-boundary patterns for each keyword to avoid substring false-matches
+# e.g. "roll" must not match "rolled", "can" must not match "Canterbury".
+_CATEGORY_PATTERNS: list[tuple[str, list[re.Pattern]]] = [
+    (cat, [re.compile(r"\b" + re.escape(kw) + r"\b") for kw in keywords])
+    for cat, keywords in CATEGORY_KEYWORDS.items()
+]
+
+
 def _infer_category(name: str) -> str:
     lowered = name.lower()
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(keyword in lowered for keyword in keywords):
+    for category, patterns in _CATEGORY_PATTERNS:
+        if any(p.search(lowered) for p in patterns):
             return category
     return "other"
 

@@ -89,24 +89,52 @@ async def add_items_bulk(
     except ValueError:
         added_date = date.today()
 
+    # Requested storage is the default; non-perishable categories override to pantry.
     try:
-        storage = StorageLocation(body.storage)
+        default_storage = StorageLocation(body.storage)
     except ValueError:
-        storage = StorageLocation.FRIDGE
+        default_storage = StorageLocation.FRIDGE
 
-    to_create = [
-        PantryItemCreate(
-            name=item.name,
-            category=item.category,
-            quantity=item.quantity,
-            unit=item.unit,
-            storage=storage,
-            is_perishable=item.is_perishable,
-            added_date=added_date,
+    PANTRY_CATEGORIES = {"canned", "dry_goods", "condiment", "bread"}
+
+    to_create = []
+    seen: set[str] = set()
+    for item in body.items:
+        normalized_name = " ".join(item.name.strip().split()).lower()
+
+        # Auto-correct storage: shelf-stable categories belong in the pantry
+        item_storage = (
+            StorageLocation.PANTRY
+            if item.category in PANTRY_CATEGORIES
+            else default_storage
         )
-        for item in body.items
-    ]
+
+        key = f"{normalized_name}|{item.category}|{item.unit}|{item_storage.value}|{added_date.isoformat()}"
+        if key in seen:
+            continue
+        seen.add(key)
+
+        to_create.append(
+            PantryItemCreate(
+                name=item.name,
+                category=item.category,
+                quantity=item.quantity,
+                unit=item.unit,
+                storage=item_storage,
+                is_perishable=item.is_perishable,
+                added_date=added_date,
+            )
+        )
+
     return await inventory_service.add_items_bulk(user_id, to_create)
+
+
+@router.post("/cleanup", response_model=dict)
+async def cleanup_inventory(user_id: str = Query(default=DEFAULT_USER)):
+    """Remove non-food noise items (e.g. store names picked up from receipts) and
+    deduplicate existing pantry rows that have the same name, category and storage."""
+    removed, deduped = await inventory_service.cleanup_items(user_id)
+    return {"removed_noise": removed, "removed_duplicates": deduped, "total_cleaned": removed + deduped}
 
 
 @router.put("/{item_id}", response_model=PantryItem)

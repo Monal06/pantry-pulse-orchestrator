@@ -104,3 +104,43 @@ async def log_consumption(user_id: str, item_name: str, category: str) -> None:
 
 async def get_consumption_history(user_id: str) -> list[dict]:
     return _consumption_log.get(user_id, [])
+
+
+# Known non-food noise words and store names that get OCR'd into receipts.
+_NOISE_WORDS = {
+    "canterbury", "woolworths", "coles", "aldi", "iga", "tesco", "walmart",
+    "target", "costco", "kroger", "safeway", "lidl", "waitrose", "asda",
+    "loyalty", "receipt", "total", "subtotal", "tax", "change", "cash",
+}
+
+
+async def cleanup_items(user_id: str) -> tuple[int, int]:
+    """Remove obvious non-food noise rows and deduplicate exact matches.
+    Returns (noise_removed, duplicates_removed)."""
+    items = _user_items(user_id)
+
+    # Pass 1: remove noise
+    noise_removed = 0
+    filtered: list[dict] = []
+    for row in items:
+        name_lower = row.get("name", "").strip().lower()
+        tokens = set(name_lower.split())
+        if tokens & _NOISE_WORDS or name_lower in _NOISE_WORDS:
+            noise_removed += 1
+        else:
+            filtered.append(row)
+
+    # Pass 2: deduplicate (same name + category + storage → keep first)
+    dupes_removed = 0
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for row in filtered:
+        key = f"{row.get('name','').strip().lower()}|{row.get('category','other')}|{row.get('storage','fridge')}"
+        if key in seen:
+            dupes_removed += 1
+        else:
+            seen.add(key)
+            deduped.append(row)
+
+    _store[user_id] = deduped
+    return noise_removed, dupes_removed
