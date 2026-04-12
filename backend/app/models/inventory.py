@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -52,6 +52,29 @@ def compute_freshness(added_date: date, category: str, storage: str, purchase_da
     return round(freshness, 1)
 
 
+def compute_expiry(category: str, storage: str, purchase_date: Optional[date] = None, added_date: Optional[date] = None) -> tuple[Optional[date], Optional[int]]:
+    """
+    Compute the estimated expiry date and days remaining for a food item.
+
+    Uses the decay rate to determine when freshness reaches 0 (inedible).
+    Returns (expires_on_date, days_remaining) or (None, None) for non-decaying items.
+    """
+    decay = get_decay_rate(category, storage)
+    if decay <= 0:
+        return None, None  # non-perishable / negligible decay
+
+    age_reference = purchase_date if purchase_date else (added_date if added_date else date.today())
+
+    # Total shelf life in days: freshness goes from 100 → 0 at `decay` points/day
+    total_shelf_life_days = 100.0 / decay
+    expires_on = age_reference + timedelta(days=total_shelf_life_days)
+
+    days_remaining = (expires_on - date.today()).days
+    days_remaining = max(0, days_remaining)
+
+    return expires_on, days_remaining
+
+
 def freshness_category(score: float) -> FreshnessCategory:
     if score >= 70:
         return FreshnessCategory.GOOD
@@ -100,6 +123,8 @@ class PantryItem(PantryItemBase):
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
     visual_hazard: bool = False
+    expires_on: Optional[date] = None
+    days_remaining: Optional[int] = None
     created_at: Optional[datetime] = None
 
     @classmethod
@@ -129,6 +154,9 @@ class PantryItem(PantryItemBase):
         if visual_hazard:
             score = 0.0
 
+        # Compute expiry date
+        exp_date, days_left = compute_expiry(category, storage, purchase, added) if is_perishable else (None, None)
+
         return cls(
             id=row["id"],
             user_id=row["user_id"],
@@ -147,6 +175,8 @@ class PantryItem(PantryItemBase):
             ai_freshness_score=row.get("ai_freshness_score"),
             freshness_score=score,
             freshness_status=freshness_category(score),
+            expires_on=exp_date,
+            days_remaining=days_left,
             created_at=row.get("created_at"),
         )
 

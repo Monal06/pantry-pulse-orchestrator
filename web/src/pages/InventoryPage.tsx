@@ -5,7 +5,7 @@ import {
   Tooltip, Stack,
 } from "@mui/material";
 import {
-  Delete, Restaurant, AcUnit, Refresh,
+  Delete, Restaurant, AcUnit, Refresh, Schedule,
   CameraAlt, Receipt, QrCodeScanner, Mic, Edit,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
@@ -203,6 +203,31 @@ export default function InventoryPage() {
                   </Box>
                 )}
               </Box>
+
+              {/* Expires on label */}
+              {item.is_perishable && item.expires_on && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 1 }}>
+                  <Schedule sx={{ fontSize: 14, color: item.days_remaining != null && item.days_remaining <= 2 ? "error.main" : item.days_remaining != null && item.days_remaining <= 5 ? "warning.main" : "text.secondary" }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    sx={{
+                      color: item.days_remaining != null && item.days_remaining <= 2 ? "error.main"
+                        : item.days_remaining != null && item.days_remaining <= 5 ? "warning.main"
+                        : "text.secondary",
+                    }}
+                  >
+                    {item.days_remaining === 0
+                      ? "Expired"
+                      : item.days_remaining === 1
+                        ? "Expires tomorrow"
+                        : `Expires in ${item.days_remaining} days`}
+                    {" · "}
+                    {new Date(item.expires_on).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </Typography>
+                </Box>
+              )}
+
               {item.is_perishable && (
                 <LinearProgress
                   variant="determinate"

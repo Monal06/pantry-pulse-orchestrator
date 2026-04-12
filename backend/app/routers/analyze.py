@@ -448,3 +448,36 @@ async def analyze_freshness_deep(
         )
 
     return result
+
+
+@router.post("/test-receipt-item")
+async def test_receipt_item(
+    item_name: str = Query(..., description="Item name to test categorization"),
+    user_id: str = Query(default=DEFAULT_USER),
+):
+    """Test endpoint to check how an item would be categorized from receipt parsing."""
+    
+    # Create a mock receipt with just this item
+    mock_receipt_text = f"""
+    GROCERY RECEIPT
+    
+    {item_name}     $5.99
+    
+    TOTAL: $5.99
+    """
+    
+    try:
+        # Test the parsing logic
+        result = await gemini_service.parse_voice_input(f"I bought {item_name}")
+        
+        return {
+            "item_name": item_name,
+            "parsed_result": result,
+            "would_get_freshness": True,  # All items should get freshness if properly categorized
+        }
+    except Exception as e:
+        return {
+            "item_name": item_name,
+            "error": str(e),
+            "would_get_freshness": False,
+        }

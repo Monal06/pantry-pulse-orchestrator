@@ -135,14 +135,28 @@ Return ONLY valid JSON, no markdown fences."""
 
 async def analyze_receipt_photo(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
     """Extract food items from a receipt photo."""
-    prompt = """You are a grocery receipt parser. Analyze this receipt photo and extract all FOOD items.
+    prompt = """You are a grocery receipt parser. Analyze this receipt photo and extract ALL FOOD items including pet food.
 
 For each food item, return:
 - name: the food item name (clean it up from receipt abbreviations)
 - category: one of [dairy, meat, seafood, fruit, vegetable, bread, eggs, leftover, condiment, canned, dry_goods, beverage, frozen, other]
 - quantity: quantity purchased (number, default 1)
-- unit: unit of measure (e.g. "item", "lb", "oz", "gallon", "pack")
+- unit: unit of measure (e.g. "item", "lb", "oz", "gallon", "pack", "bag", "can", "box")
 - is_perishable: true/false
+
+IMPORTANT CATEGORIZATION RULES:
+- Pet food containing meat/chicken → use "meat" category 
+- Pet food containing fish → use "seafood" category
+- Dry pet food, pet treats → use "dry_goods" category
+- Canned pet food → use "canned" category
+- Fresh pet food (refrigerated) → use appropriate category (meat/seafood)
+- All pet food should be marked as perishable: true (unless it's clearly shelf-stable dry food)
+
+Examples:
+- "Harrington Senior Chicken & Rice" → category: "meat", is_perishable: true
+- "Dog food wet chicken" → category: "meat", is_perishable: true  
+- "Cat food tuna" → category: "seafood", is_perishable: true
+- "Dry dog kibble" → category: "dry_goods", is_perishable: false
 
 Skip non-food items (bags, tax, discounts, cleaning products, etc).
 
@@ -429,10 +443,38 @@ Extract each food item mentioned. For each, determine:
 - is_perishable: true/false
 - storage: most likely storage location [fridge, freezer, pantry, counter]
 - purchase_date: an ISO date string (YYYY-MM-DD) representing WHEN the user acquired the item.
-  Pay very close attention to any temporal cues in the text such as "last year", "yesterday",
-  "3 days ago", "last week", "a month ago", "bought in January", "last Monday", etc.
-  Convert those relative expressions into an actual date based on today ({today}).
-  If no time information is given, default to today ({today}).
+
+IMPORTANT CATEGORIZATION RULES:
+- Pet food containing meat/chicken → use "meat" category 
+- Pet food containing fish → use "seafood" category
+- Dry pet food, pet treats → use "dry_goods" category
+- Canned pet food → use "canned" category
+- Fresh pet food (refrigerated) → use appropriate category (meat/seafood)
+
+CRITICAL: Pay attention to BOTH purchase timing AND expiry timing mentioned in the text:
+  
+  For PURCHASE timing ("bought yesterday", "got last week", etc.):
+  Convert those relative expressions into an actual purchase date based on today ({today}).
+  
+  For EXPIRY timing ("expires in 3 days", "expiring tomorrow", "goes bad in a week", "use by Friday", etc.):
+  Work backwards from the expiry date to estimate when the item was likely purchased.
+  Use these decay rates per day for different food categories in fridge storage:
+  - meat: 8 points/day (so if expires in 3 days with ~75 freshness, bought ~3 days ago)
+  - dairy: 5 points/day
+  - fruit: 3.5 points/day  
+  - vegetable: 3 points/day
+  - seafood: 10 points/day
+  - bread: 4 points/day
+  - eggs: 2 points/day
+  - other: 2 points/day
+  
+  Example: "chicken breast expiring in 3 days" = meat category, decay 8/day
+  If expiring in 3 days, freshness should be ~75 (use within 3 days)
+  Working back: 100 - (days_since_purchase * 8) = 75
+  So: days_since_purchase = (100-75)/8 = ~3 days ago
+  Purchase date = today - 3 days
+  
+  If no timing information is given, default to today ({today}).
 
 Return JSON:
 {{
