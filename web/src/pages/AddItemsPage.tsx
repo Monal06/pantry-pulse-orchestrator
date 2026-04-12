@@ -750,6 +750,38 @@ export default function AddItemsPage() {
               {/* Results content */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>Analysis Complete ✅</Typography>
+                {result.parsed_items?.length === 0 && !(result.items_added?.length > 0) && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                      ⚠️ No items found on the receipt
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1.5, color: "text.secondary" }}>
+                      The receipt parser couldn't extract any food items. This often happens when:
+                    </Typography>
+                    <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
+                      <li><Typography variant="body2">Receipt is blurry or poorly lit</Typography></li>
+                      <li><Typography variant="body2">Text is too small or faded</Typography></li>
+                      <li><Typography variant="body2">Receipt is at an angle or partially cut off</Typography></li>
+                      <li><Typography variant="body2">Image is a photograph of a printed receipt (try scanning instead)</Typography></li>
+                    </ul>
+                    <Typography variant="body2" sx={{ mt: 1.5, mb: 1 }}>Try these tips:</Typography>
+                    <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
+                      <li><Typography variant="body2">Use better lighting (natural sunlight or bright lamp)</Typography></li>
+                      <li><Typography variant="body2">Place receipt flat on a surface</Typography></li>
+                      <li><Typography variant="body2">Get closer so text is larger and sharper</Typography></li>
+                      <li><Typography variant="body2">Clean the camera lens</Typography></li>
+                      <li><Typography variant="body2">Try uploading a different photo of the same receipt</Typography></li>
+                    </ul>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => { setResult(null); setImagePreview(null); }} 
+                      sx={{ mt: 2 }}
+                      size="small"
+                    >
+                      Try Another Photo
+                    </Button>
+                  </Alert>
+                )}
                 {result.parsed_items?.length > 0 && !(result.items_added?.length > 0) && (
                   <Box sx={{ mb: 2 }}>
                     <Typography sx={{ mb: 1 }}>{result.parsed_items.length} items found on receipt</Typography>

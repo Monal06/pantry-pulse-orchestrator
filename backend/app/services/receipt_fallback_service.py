@@ -99,6 +99,56 @@ def _looks_like_non_food(line: str) -> bool:
     return False
 
 
+# Abbreviation expansions for cleaner item names
+ABBREVIATION_MAP = {
+    "yog": "yogurt",
+    "bberry": "blueberry",
+    "berry": "berry",
+    "imp": "imported",
+    "uht": "",  # ultra-high-temp — typically just prefix for milk, drop it
+    "cav": "cavolo",
+    "barn": "",  # brand name, drop it
+    "org": "organic",
+    "conv": "conventional",
+}
+
+
+def _clean_item_name(name: str) -> str:
+    """Clean OCR/receipt item names: expand abbreviations, remove size, standardize format."""
+    cleaned = name.strip()
+    
+    # Remove trailing size/unit info (e.g. "1L", "350G", "/Kg", "x 12")
+    cleaned = re.sub(r"\s*[\d.]+\s*(?:ml|l|g|kg|oz|lb|item|items|pack|x)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*/\s*[a-z]+\s*$", "", cleaned, flags=re.IGNORECASE)
+    
+    # Split into tokens and expand abbreviations
+    tokens = cleaned.split()
+    expanded = []
+    for token in tokens:
+        lower = token.lower()
+        # Check if token matches an abbreviation
+        if lower in ABBREVIATION_MAP:
+            expanded_token = ABBREVIATION_MAP[lower]
+            if expanded_token:  # don't add empty expansions
+                expanded.append(expanded_token.title())
+        else:
+            expanded.append(token)
+    
+    cleaned = " ".join(expanded).strip()
+    
+    # Remove consecutive duplicate words (e.g. "Milk Milk" → "Milk")
+    words = cleaned.split()
+    deduped = []
+    for word in words:
+        if not deduped or word.lower() != deduped[-1].lower():
+            deduped.append(word)
+    cleaned = " ".join(deduped)
+    
+    return cleaned if cleaned else name
+
+
+
+
 def _parse_quantity(line: str) -> tuple[float, str]:
     # Parse only explicit quantity formats to avoid reading dates/codes as quantity.
     lowered = line.lower()
@@ -208,9 +258,10 @@ def _extract_items(lines: list[str], store_name: str = "", relaxed: bool = False
 
         qty, unit = _parse_quantity(line)
         category = _infer_category(line)
+        clean_name = _clean_item_name(line)
         items.append(
             {
-                "name": line.title(),
+                "name": clean_name,
                 "category": category,
                 "quantity": qty,
                 "unit": unit,
