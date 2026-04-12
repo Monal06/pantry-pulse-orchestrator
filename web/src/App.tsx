@@ -56,9 +56,9 @@ function AppLayout() {
         </Typography>
       </Box>
       <Divider />
-      <List sx={{ px: 1 }}>
+      <List sx={{ px: 1, py: 2 }}>
         {NAV_ITEMS.map((item, i) => {
-          if ("divider" in item) return <Divider key={i} sx={{ my: 1 }} />;
+          if ("divider" in item) return <Divider key={i} sx={{ my: 1, opacity: 0.5 }} />;
           const isActive = location.pathname === item.path;
           return (
             <ListItemButton
@@ -67,16 +67,16 @@ function AppLayout() {
               to={item.path}
               onClick={() => isMobile && setMobileOpen(false)}
               sx={{
-                borderRadius: 2, mb: 0.5,
-                bgcolor: isActive ? "primary.light" + "40" : "transparent",
-                color: isActive ? "primary.dark" : "text.primary",
-                "&:hover": { bgcolor: "primary.light" + "20" },
+                borderRadius: "16px", mb: 0.5, mx: 1,
+                bgcolor: isActive ? "#bbf7d0" : "transparent",
+                color: isActive ? "#065f46" : "#475569",
+                "&:hover": { bgcolor: isActive ? "#bbf7d0" : "rgba(0,0,0,0.04)" },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 36, color: isActive ? "primary.main" : "text.secondary" }}>
+              <ListItemIcon sx={{ minWidth: 40, color: "inherit" }}>
                 {item.icon}
               </ListItemIcon>
-              <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: isActive ? 700 : 500 }} />
+              <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: isActive ? 700 : 500, fontSize: "0.95rem" }} />
             </ListItemButton>
           );
         })}
@@ -85,7 +85,10 @@ function AppLayout() {
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box sx={{ 
+      display: "flex", minHeight: "100vh", p: { xs: 0, md: 2 }, gap: { xs: 0, md: 2 },
+      background: "radial-gradient(at 0% 0%, #fef3c7 0px, transparent 50%), radial-gradient(at 100% 0%, #d1fae5 0px, transparent 50%), radial-gradient(at 100% 100%, #cffafe 0px, transparent 50%), radial-gradient(at 0% 100%, #fee2e2 0px, transparent 50%), #f8fafc"
+    }}>
       {isMobile ? (
         <Drawer
           variant="temporary"
@@ -96,21 +99,31 @@ function AppLayout() {
           {drawerContent}
         </Drawer>
       ) : (
-        <Drawer
-          variant="permanent"
+        <Box
           sx={{
             width: DRAWER_WIDTH,
             flexShrink: 0,
-            "& .MuiDrawer-paper": { width: DRAWER_WIDTH, borderRight: "1px solid #eee" },
+            bgcolor: "rgba(255, 255, 255, 0.4)",
+            backdropFilter: "blur(20px)",
+            borderRadius: "24px",
+            display: { xs: "none", md: "flex" },
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.02)"
           }}
         >
           {drawerContent}
-        </Drawer>
+        </Box>
       )}
 
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ 
+        flex: 1, display: "flex", flexDirection: "column",
+        bgcolor: "#ffffff", borderRadius: { xs: 0, md: "24px" },
+        boxShadow: "0 4px 24px rgba(0,0,0,0.02)",
+        overflow: "hidden"
+      }}>
         {isMobile && (
-          <AppBar position="sticky" color="inherit" elevation={1}>
+          <AppBar position="sticky" color="inherit">
             <Toolbar>
               <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1 }}>
                 <MenuIcon />
@@ -120,7 +133,7 @@ function AppLayout() {
             </Toolbar>
           </AppBar>
         )}
-        <Box sx={{ flex: 1, p: { xs: 2, sm: 3 }, maxWidth: 1000, width: "100%" }}>
+        <Box sx={{ flex: 1, p: { xs: 2, sm: 4 }, width: "100%", overflowY: "auto" }}>
           <Routes>
             <Route path="/" element={<InventoryPage />} />
             <Route path="/add-items" element={<AddItemsPage />} />

@@ -25,7 +25,7 @@ export default function WeeklyPlanPage() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={800} sx={{ mb: 2 }}>Weekly Meal Plan</Typography>
+      <Typography variant="h4" fontWeight={800} sx={{ mb: 4, letterSpacing: "-0.02em" }}>Weekly Meal Plan</Typography>
 
       <Button
         variant="contained"
@@ -46,8 +46,8 @@ export default function WeeklyPlanPage() {
       )}
 
       {plan?.summary && (
-        <Card sx={{ mb: 2, bgcolor: "#F1F8E9" }}>
-          <CardContent>
+        <Card sx={{ mb: 4, bgcolor: "#f0fdf4", borderColor: "#bbf7d0" }}>
+          <CardContent sx={{ p: 3 }}>
             <Typography>{plan.summary}</Typography>
             {plan.shopping_needed?.length > 0 && (
               <Box sx={{ mt: 1.5 }}>
@@ -64,20 +64,20 @@ export default function WeeklyPlanPage() {
       )}
 
       {plan?.days?.map((day: any) => (
-        <Card key={day.day} sx={{ mb: 2 }}>
-          <CardContent>
+        <Card key={day.day} sx={{ mb: 3 }}>
+          <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" fontWeight={800} color="primary" gutterBottom>
               {day.date_label}
             </Typography>
 
             {day.items_to_use_today?.length > 0 && (
-              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#FFF3E0", borderRadius: 2 }}>
-                <Typography variant="body2" fontWeight={700} sx={{ color: "#E65100", mb: 0.5 }}>
+              <Box sx={{ mb: 3, p: 2, bgcolor: "#ffedd5", borderRadius: "16px" }}>
+                <Typography variant="body2" fontWeight={700} sx={{ color: "#9a3412", mb: 1 }}>
                   Must use today:
                 </Typography>
-                <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap>
+                <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap>
                   {day.items_to_use_today.map((item: string, i: number) => (
-                    <Chip key={i} label={item} size="small" sx={{ bgcolor: "#FFCC80" }} />
+                    <Chip key={i} label={item} size="small" sx={{ bgcolor: "#fdba74", color: "#7c2d12" }} />
                   ))}
                 </Stack>
               </Box>
@@ -105,7 +105,7 @@ export default function WeeklyPlanPage() {
                   <Typography fontWeight={600} sx={{ my: 0.5 }}>{meal.name}</Typography>
                   <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap>
                     {meal.ingredients_used?.map((ing: string, i: number) => (
-                      <Chip key={i} label={ing} size="small" sx={{ bgcolor: "#E8F5E9" }} />
+                      <Chip key={i} label={ing} size="small" sx={{ bgcolor: "#f1f5f9", color: "#334155" }} />
                     ))}
                   </Stack>
                   <Divider sx={{ mt: 1.5 }} />

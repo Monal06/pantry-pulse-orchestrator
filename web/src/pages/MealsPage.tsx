@@ -93,9 +93,9 @@ class MealsStore {
 const mealsStore = new MealsStore();
 
 const PRIORITY_COLORS: Record<string, string> = {
-  critical: "#F44336",
-  use_soon: "#FF9800",
-  normal: "#4CAF50",
+  critical: "#ef4444",
+  use_soon: "#f59e0b",
+  normal: "#22c55e",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -186,28 +186,29 @@ export default function MealsPage() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={800} sx={{ mb: 2 }}>Meal Suggestions</Typography>
+      <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Meal Suggestions</Typography>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" startIcon={<CalendarMonth />} onClick={() => navigate("/weekly-plan")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
+            Weekly Plan
+          </Button>
+          <Button variant="outlined" startIcon={<Favorite />} onClick={() => navigate("/recipes")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
+            Saved
+          </Button>
+        </Stack>
+      </Box>
 
       {summary && (
-        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 3 }}>
           {summary.critical_items > 0 && (
-            <Chip label={`${summary.critical_items} critical`} sx={{ bgcolor: "#FFEBEE" }} />
+            <Chip label={`${summary.critical_items} critical`} sx={{ bgcolor: "#fee2e2", color: "#991b1b" }} />
           )}
           {summary.use_soon_items > 0 && (
-            <Chip label={`${summary.use_soon_items} use soon`} sx={{ bgcolor: "#FFF3E0" }} />
+            <Chip label={`${summary.use_soon_items} use soon`} sx={{ bgcolor: "#ffedd5", color: "#9a3412" }} />
           )}
-          <Chip label={`${summary.total_items} total items`} />
+          <Chip label={`${summary.total_items} total items`} sx={{ bgcolor: "#f1f5f9", color: "#334155" }} />
         </Stack>
       )}
-
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button variant="outlined" startIcon={<CalendarMonth />} onClick={() => navigate("/weekly-plan")}>
-          Weekly Plan
-        </Button>
-        <Button variant="outlined" startIcon={<Favorite />} onClick={() => navigate("/recipes")}>
-          Saved Recipes
-        </Button>
-      </Stack>
 
       <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
         <Button
@@ -235,10 +236,10 @@ export default function MealsPage() {
           key={index}
           sx={{
             mb: 2,
-            borderLeft: `4px solid ${PRIORITY_COLORS[meal.freshness_priority] || "#4CAF50"}`,
+            borderLeft: `4px solid ${PRIORITY_COLORS[meal.freshness_priority] || "#22c55e"}`,
           }}
         >
-          <CardContent>
+          <CardContent sx={{ p: 4 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
               <Typography variant="h6" fontWeight={700}>{meal.name}</Typography>
               <Chip label={`${meal.prep_time_minutes} min`} size="small" icon={<Restaurant />} />
@@ -273,8 +274,10 @@ export default function MealsPage() {
               label={PRIORITY_LABELS[meal.freshness_priority] || "Recipe"}
               size="small"
               sx={{
-                bgcolor: (PRIORITY_COLORS[meal.freshness_priority] || "#4CAF50") + "20",
+                bgcolor: (PRIORITY_COLORS[meal.freshness_priority] || "#22c55e") + "15",
+                color: PRIORITY_COLORS[meal.freshness_priority] || "#22c55e",
                 mb: 2,
+                fontWeight: 600
               }}
             />
 
@@ -283,7 +286,7 @@ export default function MealsPage() {
             </Typography>
             <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap sx={{ mb: 1 }}>
               {meal.ingredients_used?.map((ing: string, i: number) => (
-                <Chip key={i} label={ing} size="small" sx={{ bgcolor: "#E8F5E9" }} />
+                <Chip key={i} label={ing} size="small" sx={{ bgcolor: "#f1f5f9", color: "#334155" }} />
               ))}
             </Stack>
 
@@ -307,7 +310,7 @@ export default function MealsPage() {
       ))}
 
       {tips.length > 0 && (
-        <Card sx={{ bgcolor: "#FFF8E1" }}>
+        <Card sx={{ bgcolor: "#fffbeb", borderColor: "#fef3c7" }}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#E65100", mb: 1 }}>
               Waste Prevention Tips
