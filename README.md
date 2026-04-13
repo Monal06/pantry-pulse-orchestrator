@@ -73,23 +73,92 @@ Track your food waste reduction impact over time:
 ## Project Structure
 
 ```text
-freshsave/
+pantry-pulse-orchestrator/
+├── DEMO_SCRIPT_UPDATED.sh
+├── deploy.sh
+├── Procfile
+├── render.yaml
+├── runtime.txt
+├── vercel.json
 ├── backend/
+│   ├── .env.example
+│   ├── .env.production.example
 │   ├── app/
-│   │   ├── main.py
 │   │   ├── config.py
+│   │   ├── main.py
 │   │   ├── models/
+│   │   │   ├── biometric.py
+│   │   │   ├── community.py
+│   │   │   ├── exit_strategy.py
+│   │   │   ├── household.py
+│   │   │   ├── inventory.py
+│   │   │   ├── profile.py
+│   │   │   ├── recipe.py
+│   │   │   └── waste.py
+│   │   ├── modules/
+│   │   │   └── waste_engine/
+│   │   │       ├── agents/
+│   │   │       ├── charities_database.py
+│   │   │       ├── food_safety_standards.py
+│   │   │       ├── orchestrator.py
+│   │   │       ├── rag_retriever.py
+│   │   │       ├── rag_retriever_advanced.py
+│   │   │       ├── smart_decision_engine.py
+│   │   │       └── upcycle_nonfood_uses.py
 │   │   ├── routers/
+│   │   │   ├── analyze.py
+│   │   │   ├── community.py
+│   │   │   ├── exit_strategy.py
+│   │   │   ├── household.py
+│   │   │   ├── inventory.py
+│   │   │   ├── meals.py
+│   │   │   ├── notifications.py
+│   │   │   ├── profile.py
+│   │   │   ├── recipes.py
+│   │   │   ├── shopping.py
+│   │   │   └── waste.py
 │   │   ├── services/
+│   │   │   ├── barcode_service.py
+│   │   │   ├── bayesian_freshness_service.py
+│   │   │   ├── clip_freshness_service.py
+│   │   │   ├── cv_freshness_service.py
+│   │   │   ├── ensemble_freshness_service.py
+│   │   │   ├── gemini_service.py
+│   │   │   ├── household_service.py
+│   │   │   ├── image_crop_service.py
+│   │   │   ├── inventory_service.py
+│   │   │   ├── llm_reasoning_service.py
+│   │   │   ├── notification_service.py
+│   │   │   ├── profile_service.py
+│   │   │   ├── receipt_fallback_service.py
+│   │   │   ├── recipe_service.py
+│   │   │   ├── vit_anomaly_service.py
+│   │   │   └── waste_service.py
 │   │   └── utils/
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── tests/
+│       ├── test_all_food_types_complete.py
+│       ├── test_decision_engine_comprehensive.py
+│       ├── test_receipt_fallback.py
+│       ├── test_upcycle_steps_fix.py
+│       ├── test_upcycle_with_steps.py
+│       └── test_visual_hazard_safety.py
 ├── web/
+│   ├── public/
 │   ├── src/
+│   │   ├── assets/
+│   │   ├── hooks/
 │   │   ├── pages/
 │   │   ├── api.ts
 │   │   ├── App.tsx
-│   │   └── main.tsx
+│   │   ├── main.tsx
+│   │   └── theme.ts
+│   ├── eslint.config.js
+│   ├── index.html
 │   ├── package.json
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
 │   └── vite.config.ts
 └── README.md
 ```
@@ -97,43 +166,140 @@ freshsave/
 ## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- A free [Google AI Studio](https://aistudio.google.com) API key
-- Tesseract OCR (used as receipt fallback model)
 
-On macOS:
+| Requirement | Version | Download |
+|-------------|---------|----------|
+| Python | 3.11+ | [python.org](https://www.python.org/downloads/) |
+| Node.js | 18+ | [nodejs.org](https://nodejs.org/) |
+| Git | any | [git-scm.com](https://git-scm.com/) |
+| Gemini API Key | — | [aistudio.google.com](https://aistudio.google.com) |
+
+Tesseract OCR is also required for the receipt fallback parser.
+
+---
+
+### Quick Deploy (For Judges)
+
+**Want to demo the app instantly?** This repository includes deployment-ready files for common free hosts:
+
+- `render.yaml` + `Procfile` for Render
+- `vercel.json` for Vercel
+- `deploy.sh` for scripted deployment flow
+- `DEMO_SCRIPT_UPDATED.sh` for guided demo steps
+
+Live demo will be available at: `https://pantry-pulse-web.onrender.com` (once deployed)
+
+---
+
+## Local Development Setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/pantry-pulse-orchestrator.git
+cd pantry-pulse-orchestrator
+```
+
+---
+
+### 2. Install Tesseract OCR
+
+#### macOS
 ```bash
 brew install tesseract
 ```
 
-### Quick Deploy (For Judges)
+#### Windows
+1. Download the installer from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+2. Run the installer (default path: `C:\Program Files\Tesseract-OCR\`)
+3. Add Tesseract to your PATH:
+   - Open **System Properties → Advanced → Environment Variables**
+   - Under **System variables**, find `Path` and click **Edit**
+   - Add `C:\Program Files\Tesseract-OCR\`
+4. Verify: open a new terminal and run `tesseract --version`
 
-**Want to demo the app instantly?** See [DEPLOYMENT.md](./DEPLOYMENT.md) for one-click deployment to free hosting platforms like Render, Railway, or Vercel.
+---
 
-Live demo will be available at: `https://pantry-pulse-web.onrender.com` (once deployed)
+### 3. Backend Setup
 
-### Local Development Setup
-
-### Backend Setup
+#### macOS / Linux
 
 ```bash
 cd backend
 
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Open .env and set your GEMINI_API_KEY
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs: `http://localhost:8000/docs`
+#### Windows (Command Prompt)
 
-### Web Setup
+```cmd
+cd backend
+
+python -m venv .venv
+.venv\Scripts\activate.bat
+
+pip install -r requirements.txt
+
+copy .env.example .env
+rem Open .env in a text editor and set your GEMINI_API_KEY
+
+uvicorn app.main:app --reload --port 8000
+```
+
+#### Windows (PowerShell)
+
+```powershell
+cd backend
+
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+
+Copy-Item .env.example .env
+# Open .env and set your GEMINI_API_KEY
+
+uvicorn app.main:app --reload --port 8000
+```
+
+> **Windows PowerShell note:** If you get an execution policy error, run:
+> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+
+API docs available at: `http://localhost:8000/docs`
+
+---
+
+### 4. Configure Environment Variables
+
+Edit `backend/.env` and fill in your values:
+
+```env
+# Required
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: rotate through multiple keys to avoid rate limits
+# GEMINI_API_KEYS=key1,key2,key3
+
+# Database (optional — app works without Supabase in demo mode)
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_KEY=your_supabase_anon_key
+```
+
+Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com).
+
+---
+
+### 5. Web Setup
+
+#### macOS / Linux / Windows
 
 ```bash
 cd web
@@ -143,7 +309,9 @@ npm run dev
 
 Web app: `http://localhost:5173`
 
-`web/vite.config.ts` already proxies `/api` to `http://localhost:8000` for local development.
+`web/vite.config.ts` already proxies `/api` to `http://localhost:8000` for local development — no extra configuration needed.
+
+---
 
 ### Production Build (Web)
 
@@ -153,9 +321,23 @@ npm run build
 npm run preview
 ```
 
+---
+
+### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `ECONNREFUSED` in Vite | Backend is not running — start uvicorn first |
+| `ValidationError` on startup | `.env` has unknown keys — ensure `"extra": "ignore"` is in `config.py` |
+| `tesseract is not installed` | Install Tesseract and ensure it's on your PATH (see step 2) |
+| PowerShell activation error | Run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+| `torch` install fails on Windows | Install [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) first |
+| Port 8000 already in use (macOS) | Run `lsof -ti :8000 \| xargs kill -9` |
+| Port 8000 already in use (Windows) | Run `netstat -ano \| findstr :8000` then `taskkill /PID <pid> /F` |
+
 ## API Endpoints
 
-The backend API is available under `/api/*` and includes inventory, analysis, meals, shopping, waste tracking, profile, community, household, recipes, and notifications routes.
+The backend API is available under `/api/*` and includes inventory, analysis, meals, shopping, waste tracking, profile, community, household, recipes, notifications, and exit strategy routes.
 
 For complete endpoint details, see router files in `backend/app/routers/` or open FastAPI docs at `http://localhost:8000/docs`.
 
