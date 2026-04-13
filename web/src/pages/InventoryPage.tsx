@@ -6,7 +6,7 @@ import {
 } from "@mui/material";
 import {
   Delete, Restaurant, AcUnit, Refresh, Schedule,
-  CameraAlt, Receipt, QrCodeScanner, Mic, Edit,
+  CameraAlt, Receipt, Mic, Edit,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { getInventory, deleteItem, useItem, freezeItem } from "../api";
@@ -172,7 +172,6 @@ export default function InventoryPage() {
           <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
             <ActionCard title="Image Upload" color="#d1fae5" icon={<CameraAlt/>} onClick={() => navigate("/add-items?mode=fridge")} />
             <ActionCard title="Receipt Upload" color="#ccfbf1" icon={<Receipt/>} onClick={() => navigate("/add-items?mode=receipt")} />
-            <ActionCard title="Barcode Scan" color="#ffedd5" icon={<QrCodeScanner/>} onClick={() => navigate("/add-items?mode=barcode")} />
             <ActionCard title="Voice Record" color="#ffe4e6" icon={<Mic/>} onClick={() => navigate("/add-items?mode=voice")} />
             <ActionCard title="Manual Entry" color="#f3e8ff" icon={<Edit/>} onClick={() => navigate("/add-items?mode=manual")} />
           </Stack>
