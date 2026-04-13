@@ -40,6 +40,10 @@ export async function deleteItem(itemId: string) {
   return request(`/inventory/${itemId}`, { method: "DELETE" });
 }
 
+export async function cleanupInventory(): Promise<{ removed_noise: number; removed_duplicates: number; total_cleaned: number }> {
+  return request("/inventory/cleanup", { method: "POST" });
+}
+
 export async function useItem(itemId: string, quantity: number) {
   return request(`/inventory/${itemId}/use?quantity=${quantity}`, {
     method: "POST",
@@ -58,9 +62,21 @@ export async function analyzeFridgePhoto(file: File) {
 export async function analyzeReceipt(file: File) {
   const form = new FormData();
   form.append("photo", file);
-  return request("/analyze/receipt?auto_add=true", {
+  return request("/analyze/receipt?auto_add=false", {
     method: "POST",
     body: form,
+  });
+}
+
+export async function confirmReceiptItems(
+  items: any[],
+  purchaseDate: string,
+  storage: string = "fridge",
+) {
+  return request("/inventory/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items, purchase_date: purchaseDate, storage }),
   });
 }
 

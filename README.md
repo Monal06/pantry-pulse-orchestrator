@@ -9,7 +9,7 @@ A web app that helps individuals and households reduce food waste through smart 
 
 ### Smart Food Input (4 Methods)
 - **Fridge/Cupboard Photo**: Upload a photo of your open fridge or cupboard. AI identifies visible food items and checks for spoilage (mold, discoloration, wilting).
-- **Receipt Scanning**: Upload a grocery receipt image to auto-populate your pantry with purchased items.
+- **Receipt Scanning**: Upload a grocery receipt image to auto-populate your pantry with purchased items. If Gemini is unavailable, the backend automatically falls back to OCR-based receipt parsing.
 - **Barcode Scanning**: Enter a product barcode (EAN/UPC) to look up items via the free Open Food Facts database.
 - **Manual Entry**: Add items with category, quantity, storage location, and perishability.
 
@@ -100,6 +100,12 @@ freshsave/
 - Python 3.11+
 - Node.js 18+
 - A free [Google AI Studio](https://aistudio.google.com) API key
+- Tesseract OCR (used as receipt fallback model)
+
+On macOS:
+```bash
+brew install tesseract
+```
 
 ### Quick Deploy (For Judges)
 

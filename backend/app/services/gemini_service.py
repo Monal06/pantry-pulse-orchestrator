@@ -12,6 +12,7 @@ from google import genai
 from google.genai import types
 
 from app.config import get_settings
+from app.services import receipt_fallback_service
 
 logger = logging.getLogger(__name__)
 
@@ -218,11 +219,17 @@ async def analyze_receipt_photo(image_bytes: bytes, mime_type: str = "image/jpeg
     prompt = """You are a grocery receipt parser. Analyze this receipt photo and extract ALL FOOD items including pet food.
 
 For each food item, return:
-- name: the food item name (clean it up from receipt abbreviations)
+- name: the PRODUCT NAME ONLY (e.g. "Almond Milk", "Yogurt", "Eggs"). Do NOT include size/quantity (1L, 350g, /kg) or brand abbreviations in the name. Put size/quantity in the "quantity" and "unit" fields instead.
 - category: one of [dairy, meat, seafood, fruit, vegetable, bread, eggs, leftover, condiment, canned, dry_goods, beverage, frozen, other]
 - quantity: quantity purchased (number, default 1)
 - unit: unit of measure (e.g. "item", "lb", "oz", "gallon", "pack", "bag", "can", "box")
 - is_perishable: true/false
+
+IMPORTANT NAMING RULES:
+- Product names should be clean: "Almond Milk", not "Milk Almond Uht 1L"
+- Extract size into quantity+unit: "Yogurt Blueberry 150G" → name: "Yogurt Blueberry", quantity: 150, unit: "g"
+- Remove brand suffixes and abbreviations from names
+- Examples of clean names: "Eggs", "Onions", "Yogurt", "Bread", "Milk", "Chicken Breast", NOT "Eggs Barn 350G" or "Yog Bberry"
 
 IMPORTANT CATEGORIZATION RULES:
 - Pet food containing meat/chicken → use "meat" category 
@@ -233,10 +240,9 @@ IMPORTANT CATEGORIZATION RULES:
 - All pet food should be marked as perishable: true (unless it's clearly shelf-stable dry food)
 
 Examples:
-- "Harrington Senior Chicken & Rice" → category: "meat", is_perishable: true
-- "Dog food wet chicken" → category: "meat", is_perishable: true  
-- "Cat food tuna" → category: "seafood", is_perishable: true
-- "Dry dog kibble" → category: "dry_goods", is_perishable: false
+- Receipt shows "Harrington Senior Chicken 400g" → name: "Chicken", quantity: 400, unit: "g", category: "meat"
+- Receipt shows "Yog Blueberry 150G" → name: "Yogurt Blueberry", quantity: 150, unit: "g", category: "dairy"
+- Receipt shows "Eggs Free Range 12 pack" → name: "Eggs", quantity: 12, unit: "item", category: "eggs"
 
 Skip non-food items (bags, tax, discounts, cleaning products, etc).
 
@@ -250,11 +256,24 @@ Return JSON in this exact format:
 
 Return ONLY valid JSON, no markdown fences."""
 
-    text = await _generate_with_retry([
-        types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-        types.Part.from_text(text=prompt),
-    ])
-    return _parse_json_response(text)
+    try:
+        text = await _generate_with_retry([
+            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+            types.Part.from_text(text=prompt),
+        ])
+        result = _parse_json_response(text)
+        if "error" not in result:
+            result["extraction_source"] = "gemini"
+            return result
+    except Exception as exc:
+        logger.warning("Gemini receipt analysis failed, falling back to heuristic parser: %s", exc)
+
+    # Gemini failed or returned unparseable JSON — use heuristic fallback parser.
+    logger.info("Running receipt fallback parser based on heuristics and OCR")
+    fallback_result = await receipt_fallback_service.analyze_receipt_photo(image_bytes, mime_type)
+    fallback_result["extraction_source"] = "fallback_heuristic"
+    fallback_result["fallback_reason"] = "gemini_failure"
+    return fallback_result
 
 
 async def check_spoilage(image_bytes: bytes, item_name: str, mime_type: str = "image/jpeg") -> dict[str, Any]:

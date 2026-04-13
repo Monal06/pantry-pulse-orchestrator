@@ -13,7 +13,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   analyzeFridgePhoto, analyzeReceipt, analyzeBarcode,
-  addManualItem, analyzeVoiceInput,
+  addManualItem, analyzeVoiceInput, confirmReceiptItems,
 } from "../api";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 
@@ -59,6 +59,7 @@ export default function AddItemsPage() {
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
   );
+  const [receiptDate, setReceiptDate] = useState("");
 
   // Voice recorder hook
   const voice = useVoiceRecorder();
@@ -95,6 +96,44 @@ export default function AddItemsPage() {
       }
     };
     input.click();
+  };
+
+  const handleReceiptUpload = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setLoading(true);
+      setResult(null);
+      setReceiptDate("");
+      try {
+        const data = await analyzeReceipt(file);
+        setResult(data);
+        setReceiptDate(data.receipt_date || "");
+      } catch (err: any) {
+        setSnackbar(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleConfirmReceiptItems = async () => {
+    if (!result?.parsed_items?.length) return;
+    setLoading(true);
+    try {
+      const finalDate = receiptDate || new Date().toISOString().split("T")[0];
+      const added = await confirmReceiptItems(result.parsed_items, finalDate, "fridge");
+      setResult({ ...result, items_added: added });
+      setSnackbar(`${added.length} items added to your pantry`);
+    } catch (e: any) {
+      setSnackbar(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBarcodeLookup = async () => {
@@ -388,7 +427,7 @@ export default function AddItemsPage() {
               <Button
                 variant="outlined"
                 startIcon={<CloudUpload />}
-                onClick={() => handleFileUpload(analyzeReceipt)}
+                onClick={handleReceiptUpload}
                 disabled={loading}
                 size="large"
                 sx={{ flex: 1 }}
@@ -711,7 +750,65 @@ export default function AddItemsPage() {
               {/* Results content */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>Analysis Complete ✅</Typography>
-                {result.items_added && (
+                {result.parsed_items?.length === 0 && !(result.items_added?.length > 0) && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                      ⚠️ No items found on the receipt
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1.5, color: "text.secondary" }}>
+                      The receipt parser couldn't extract any food items. This often happens when:
+                    </Typography>
+                    <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
+                      <li><Typography variant="body2">Receipt is blurry or poorly lit</Typography></li>
+                      <li><Typography variant="body2">Text is too small or faded</Typography></li>
+                      <li><Typography variant="body2">Receipt is at an angle or partially cut off</Typography></li>
+                      <li><Typography variant="body2">Image is a photograph of a printed receipt (try scanning instead)</Typography></li>
+                    </ul>
+                    <Typography variant="body2" sx={{ mt: 1.5, mb: 1 }}>Try these tips:</Typography>
+                    <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
+                      <li><Typography variant="body2">Use better lighting (natural sunlight or bright lamp)</Typography></li>
+                      <li><Typography variant="body2">Place receipt flat on a surface</Typography></li>
+                      <li><Typography variant="body2">Get closer so text is larger and sharper</Typography></li>
+                      <li><Typography variant="body2">Clean the camera lens</Typography></li>
+                      <li><Typography variant="body2">Try uploading a different photo of the same receipt</Typography></li>
+                    </ul>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => { setResult(null); setImagePreview(null); }} 
+                      sx={{ mt: 2 }}
+                      size="small"
+                    >
+                      Try Another Photo
+                    </Button>
+                  </Alert>
+                )}
+                {result.parsed_items?.length > 0 && !(result.items_added?.length > 0) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography sx={{ mb: 1 }}>{result.parsed_items.length} items found on receipt</Typography>
+                    {receiptDate ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Receipt date: {receiptDate}
+                      </Typography>
+                    ) : (
+                      <Box sx={{ pt: 1, border: "1px solid #e0e0e0", p: 2, borderRadius: 1, bgcolor: "#fafafa", mb: 1.5 }}>
+                        <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>📅 When was this purchased?</Typography>
+                        <TextField
+                          type="date"
+                          value={receiptDate}
+                          onChange={(e) => setReceiptDate(e.target.value)}
+                          fullWidth
+                          size="small"
+                          helperText="Date not found on receipt. Defaults to today if left blank."
+                          inputProps={{ max: new Date().toISOString().split("T")[0] }}
+                        />
+                      </Box>
+                    )}
+                    <Button variant="contained" onClick={handleConfirmReceiptItems} disabled={loading} sx={{ mt: 1 }}>
+                      Add {result.parsed_items.length} Items to Pantry
+                    </Button>
+                  </Box>
+                )}
+                {result.items_added?.length > 0 && (
                   <Typography>{result.items_added.length} items added to your pantry</Typography>
                 )}
                 {result.item_added && (

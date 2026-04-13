@@ -1,17 +1,59 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
+import re
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
 from app.models.inventory import PantryItemCreate, SpoilageReport, StorageLocation
-from app.services import gemini_service, barcode_service, inventory_service
+from app.services import gemini_service, barcode_service, inventory_service, receipt_fallback_service
 from app.services import ensemble_freshness_service, image_crop_service
 from app.routers.meals import _meal_history
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
 
 DEFAULT_USER = "demo-user"
+
+
+def _normalize_item_name(name: str) -> str:
+    """Normalize receipt item names to reduce OCR noise and duplicate variants."""
+    cleaned = re.sub(r"\s+", " ", (name or "").strip())
+    cleaned = re.sub(r"[^\w\s\-./]", "", cleaned)
+    return cleaned.title()
+
+
+def _sanitize_receipt_items(items: list[dict], store_name: str = "") -> list[dict]:
+    """Filter non-item rows and dedupe repeated OCR/Gemini receipt lines."""
+    if not items:
+        return []
+
+    normalized_store = _normalize_item_name(store_name).lower()
+    seen: set[str] = set()
+    cleaned_items: list[dict] = []
+
+    for raw in items:
+        name = _normalize_item_name(raw.get("name", ""))
+        if not name:
+            continue
+
+        # Drop accidental store-name rows (e.g. "Canterbury").
+        if normalized_store and name.lower() == normalized_store:
+            continue
+
+        # Drop lines without alphabetic tokens.
+        if not re.search(r"[A-Za-z]", name):
+            continue
+
+        dedupe_key = name.lower()
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        cleaned = dict(raw)
+        cleaned["name"] = name
+        cleaned_items.append(cleaned)
+
+    return cleaned_items
 
 
 @router.post("/fridge-photo")
@@ -180,6 +222,7 @@ async def analyze_receipt(
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
+    used_fallback = False
     try:
         result = await gemini_service.analyze_receipt_photo(image_bytes, photo.content_type)
     except Exception as e:
@@ -191,6 +234,15 @@ async def analyze_receipt(
             "description": "Unable to analyze receipt. Please try again or use manual entry.",
             "error": str(e)
         }
+    if "error" in result:
+        used_fallback = True
+        result = await receipt_fallback_service.analyze_receipt_photo(image_bytes, photo.content_type)
+
+    if "error" in result:
+        raise HTTPException(status_code=502, detail=result["error"])
+
+    # Normalize and dedupe parsed receipt items from either Gemini or fallback OCR.
+    parsed_items = _sanitize_receipt_items(result.get("items", []), result.get("store_name", ""))
 
     if "error" in result and len(result.get("items", [])) == 0:
         return {
@@ -213,8 +265,17 @@ async def analyze_receipt(
             pass
 
     items_created = []
-    if auto_add and "items" in result:
-        for raw_item in result["items"]:
+    if auto_add and parsed_items:
+        receipt_date = result.get("date", "")
+        try:
+            if receipt_date:
+                item_added_date = datetime.strptime(receipt_date, "%Y-%m-%d").date()
+            else:
+                item_added_date = date.today()
+        except (ValueError, TypeError):
+            item_added_date = date.today()
+
+        for raw_item in parsed_items:
             item = PantryItemCreate(
                 name=raw_item.get("name", "Unknown"),
                 category=raw_item.get("category", "other"),
@@ -222,18 +283,20 @@ async def analyze_receipt(
                 unit=raw_item.get("unit", "item"),
                 storage=storage,
                 is_perishable=raw_item.get("is_perishable", True),
-                added_date=date.today(),
+                added_date=item_added_date,
                 purchase_date=purchase_date,  # Use extracted receipt date
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
 
     return {
-        "items_detected": len(result.get("items", [])),
+        "items_detected": len(parsed_items),
+        "parsed_items": parsed_items,
         "items_added": items_created,
         "store_name": result.get("store_name", ""),
         "receipt_date": result.get("date", ""),
         "description": result.get("description", ""),
+        "fallback_used": used_fallback,
     }
 
 

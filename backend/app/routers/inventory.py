@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.models.inventory import (
     PantryItem,
@@ -10,6 +13,20 @@ from app.models.inventory import (
 )
 from app.models.waste import WasteEventType
 from app.services import inventory_service, waste_service
+
+
+class _ReceiptItem(BaseModel):
+    name: str
+    category: str = "other"
+    quantity: float = 1.0
+    unit: str = "item"
+    is_perishable: bool = True
+
+
+class _BulkReceiptAdd(BaseModel):
+    items: list[_ReceiptItem]
+    purchase_date: str = ""
+    storage: str = "fridge"
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -57,6 +74,67 @@ async def get_freeze_suggestions(user_id: str = Query(default=DEFAULT_USER)):
 async def add_item(item: PantryItemCreate, user_id: str = Query(default=DEFAULT_USER)):
     """Manually add a single item to the pantry."""
     return await inventory_service.add_item(user_id, item)
+
+
+@router.post("/bulk", response_model=list[PantryItem])
+async def add_items_bulk(
+    body: _BulkReceiptAdd,
+    user_id: str = Query(default=DEFAULT_USER),
+):
+    """Bulk-add items parsed from a receipt with a confirmed purchase date."""
+    try:
+        added_date = date.fromisoformat(body.purchase_date) if body.purchase_date else date.today()
+        if added_date > date.today():
+            added_date = date.today()
+    except ValueError:
+        added_date = date.today()
+
+    # Requested storage is the default; non-perishable categories override to pantry.
+    try:
+        default_storage = StorageLocation(body.storage)
+    except ValueError:
+        default_storage = StorageLocation.FRIDGE
+
+    PANTRY_CATEGORIES = {"canned", "dry_goods", "condiment", "bread"}
+
+    to_create = []
+    seen: set[str] = set()
+    for item in body.items:
+        normalized_name = " ".join(item.name.strip().split()).lower()
+
+        # Auto-correct storage: shelf-stable categories belong in the pantry
+        item_storage = (
+            StorageLocation.PANTRY
+            if item.category in PANTRY_CATEGORIES
+            else default_storage
+        )
+
+        key = f"{normalized_name}|{item.category}|{item.unit}|{item_storage.value}|{added_date.isoformat()}"
+        if key in seen:
+            continue
+        seen.add(key)
+
+        to_create.append(
+            PantryItemCreate(
+                name=item.name,
+                category=item.category,
+                quantity=item.quantity,
+                unit=item.unit,
+                storage=item_storage,
+                is_perishable=item.is_perishable,
+                added_date=added_date,
+            )
+        )
+
+    return await inventory_service.add_items_bulk(user_id, to_create)
+
+
+@router.post("/cleanup", response_model=dict)
+async def cleanup_inventory(user_id: str = Query(default=DEFAULT_USER)):
+    """Remove non-food noise items (e.g. store names picked up from receipts) and
+    deduplicate existing pantry rows that have the same name, category and storage."""
+    removed, deduped = await inventory_service.cleanup_items(user_id)
+    return {"removed_noise": removed, "removed_duplicates": deduped, "total_cleaned": removed + deduped}
 
 
 @router.put("/{item_id}", response_model=PantryItem)
