@@ -46,10 +46,21 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(exit_strategy.router, prefix="/api")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "healthy", "service": "pantry-pulse-api"}
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def api_health():
     return {"status": "healthy", "service": "pantry-pulse-api", "version": "0.2.0"}
+
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {
+        "service": "Pantry Pulse API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health",
+        "api_base": "/api",
+        "message": "API endpoints are under /api/* (e.g., /api/inventory)"
+    }
