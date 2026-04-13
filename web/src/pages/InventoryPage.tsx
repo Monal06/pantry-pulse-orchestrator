@@ -244,7 +244,7 @@ export default function InventoryPage() {
                     <Restaurant fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                {item.is_perishable && item.storage !== "freezer" && item.freshness_score < 70 && (
+                {item.is_perishable && item.storage !== "freezer" && item.freshness_score >= 30 && item.freshness_score < 70 && (
                   <Tooltip title="Move to freezer">
                     <IconButton size="small" onClick={() => handleFreeze(item.id)} sx={{ color: "#1565C0" }}>
                       <AcUnit fontSize="small" />
