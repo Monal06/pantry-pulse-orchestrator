@@ -291,6 +291,7 @@ export async function getSmartExitStrategies(params: {
   in_office?: boolean;
   eco_priority?: string;
   visual_hazard?: boolean;
+  visual_verified?: boolean;
   verified_age_days?: number;
 }) {
   const queryParams = new URLSearchParams();
@@ -304,6 +305,7 @@ export async function getSmartExitStrategies(params: {
   if (params.in_office !== undefined) queryParams.append("in_office", params.in_office.toString());
   if (params.eco_priority) queryParams.append("eco_priority", params.eco_priority);
   if (params.visual_hazard !== undefined) queryParams.append("visual_hazard", params.visual_hazard.toString());
+  if (params.visual_verified !== undefined) queryParams.append("visual_verified", params.visual_verified.toString());
   if (params.verified_age_days !== undefined) queryParams.append("verified_age_days", params.verified_age_days.toString());
 
   return request(`/orchestrate/smart/exit-strategies?${queryParams.toString()}`, {

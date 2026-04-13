@@ -378,6 +378,9 @@ async def get_smart_exit_strategies(
     visual_hazard: Optional[bool] = Query(
         default=None, description="Visual spoilage detected? (mold, discoloration, slime). None = unknown/not analyzed"
     ),
+    visual_verified: bool = Query(
+        default=False, description="Was item visually verified via photo/receipt/barcode? (True=analyzed, False=manually entered)"
+    ),
     verified_age_days: Optional[int] = Query(
         default=None, description="Verified age in days (from meal planner). None = not verified"
     ),
@@ -428,6 +431,7 @@ async def get_smart_exit_strategies(
         location=location,
         user_context=user_context,
         visual_hazard=visual_hazard,
+        visual_verified=visual_verified,
         verified_age_days=verified_age_days,
     )
 

@@ -12,25 +12,16 @@ import {
   Stack,
   Chip,
   CircularProgress,
-  Divider,
+  TextField,
+  Alert,
 } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
+import { ContentCopy, Check } from "@mui/icons-material";
 import {
   getInventory,
   getSmartExitStrategies,
-  generateUpcycleRecipes,
-  findCharitiesForDonation,
-  getDisposalInstructions,
+  
 } from "../api";
 import { freshnessColor, freshnessLabel } from "../theme";
-
-interface ExitPathOption {
-  path: string;
-  icon: string;
-  label: string;
-  description: string;
-  safety: string;
-}
 
 export default function ExitStrategyPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -40,35 +31,13 @@ export default function ExitStrategyPage() {
   const [strategiesLoading, setStrategiesLoading] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [pathResults, setPathResults] = useState<any>(null);
-  const [resultsLoading, setResultsLoading] = useState(false);
   const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
-  const [expandedCharity, setExpandedCharity] = useState<string | null>(null);
-  const [showDraftMessage, setShowDraftMessage] = useState<string | null>(null);
+  const [draftPostOpen, setDraftPostOpen] = useState(false);
+  const [draftPostText, setDraftPostText] = useState("");
+  const [draftCharityName, setDraftCharityName] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
   const strategiesCache = useRef<Map<string, unknown>>(new Map()); // Cache for instant loading
 
-  const exitPaths: Record<string, ExitPathOption> = {
-    upcycle: {
-      path: "upcycle",
-      icon: "🔄",
-      label: "UPCYCLE",
-      description: "Use before it spoils",
-      safety: "SAFE",
-    },
-    share: {
-      path: "share",
-      icon: "💝",
-      label: "SHARE",
-      description: "Donate to charity",
-      safety: "CHECK FIRST",
-    },
-    bin: {
-      path: "bin",
-      icon: "🗑️",
-      label: "BIN",
-      description: "Dispose responsibly",
-      safety: "SAFE",
-    },
-  };
 
   // Load all items
   useEffect(() => {
@@ -142,6 +111,8 @@ export default function ExitStrategyPage() {
         freshness_score: item.freshness_score,
         quantity: item.quantity,
         unit: item.unit,
+        visual_hazard: item.visual_hazard || false,  // True if mold/spoilage detected
+        visual_verified: item.visual_verified || false,  // True if analyzed from photo/receipt/barcode
         verified_age_days: verified_age_days,
       });
       console.log("[EXIT-STRATEGY] Smart Decision Engine result:", result);
@@ -164,45 +135,21 @@ export default function ExitStrategyPage() {
     setExpandedActions(new Set()); // Clear expanded state for fresh UX
   };
 
-  const handlePathAction = async (path: string) => {
-    if (!selectedItem) return;
-    setResultsLoading(true);
+ 
 
-    try {
-      let results;
-      if (path === "upcycle") {
-        results = await generateUpcycleRecipes({
-          item_name: selectedItem.name,
-          category: selectedItem.category,
-          freshness_score: selectedItem.freshness_score,
-          quantity: selectedItem.quantity,
-          unit: selectedItem.unit,
-        });
-        console.log("[UPCYCLE] Results from backend:", results);
-      } else if (path === "share") {
-        results = await findCharitiesForDonation({
-          item_name: selectedItem.name,
-          category: selectedItem.category,
-          quantity: selectedItem.quantity,
-          unit: selectedItem.unit,
-        });
-        console.log("[SHARE] Results from backend:", results);
-      } else if (path === "bin") {
-        results = await getDisposalInstructions({
-          item_name: selectedItem.name,
-          category: selectedItem.category,
-          quantity: selectedItem.quantity,
-          unit: selectedItem.unit,
-        });
-        console.log("[BIN] Results from backend:", results);
-      }
-      setPathResults(results);
-    } catch (error) {
-      console.error("Error fetching path results:", error);
-      setPathResults({ error: "Failed to load details" });
-    } finally {
-      setResultsLoading(false);
-    }
+  const handleDraftPost = (charityName: string) => {
+    const text = `📦 Food Donation Available\n\nHi ${charityName},\n\nI have ${selectedItem?.quantity} ${selectedItem?.unit} of ${selectedItem?.name} available for donation. It's in good condition and ready to be picked up or dropped off.\n\nPlease let me know if you can accept this donation!\n\nThank you for the great work you do! 💚`;
+    setDraftPostText(text);
+    setDraftCharityName(charityName);
+    setDraftPostOpen(true);
+    setCopySuccess(false);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(draftPostText).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
   };
 
   if (loading) {
@@ -373,13 +320,13 @@ export default function ExitStrategyPage() {
                         </Box>
                       </Stack>
 
-                      {option.actions && Array.isArray(option.actions) && option.actions.length > 0 && (
+                      {option.actions && Array.isArray(option.actions) && option.actions.filter((a: any) => !a.steps || a.steps.length > 0).length > 0 && (
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                             Actions:
                           </Typography>
                           <Stack spacing={2}>
-                            {option.actions.slice(0, 3).map((action: any, actionIdx: number) => {
+                            {option.actions.filter((a: any) => !a.steps || a.steps.length > 0).slice(0, 3).map((action: any, actionIdx: number) => {
                               const actionKey = `${option.exit_path}-${actionIdx}`;
                               const isExpanded = expandedActions.has(actionKey);
                               const toggleExpand = () => {
@@ -428,26 +375,38 @@ export default function ExitStrategyPage() {
                                           }}
                                         />
                                       )}
+                                      {option.exit_path === "share" && (
+                                        <Button
+                                          variant="outlined"
+                                          size="small"
+                                          sx={{ mt: 1, borderColor: "#2e7d32", color: "#2e7d32" }}
+                                          onClick={() => handleDraftPost(action.title)}
+                                        >
+                                          📝 Draft Post
+                                        </Button>
+                                      )}
                                     </Box>
-                                    <Box sx={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      width: 40,
-                                      height: 40,
-                                      bgcolor: isExpanded ? "#4caf50" : "#e0e0e0",
-                                      borderRadius: "50%",
-                                      color: isExpanded ? "white" : "#666",
-                                      fontWeight: 700,
-                                      fontSize: "1.5rem",
-                                      ml: 2,
-                                      flexShrink: 0
-                                    }}>
-                                      {isExpanded ? "−" : "+"}
-                                    </Box>
+                                    {action?.steps && Array.isArray(action.steps) && action.steps.length > 0 && (
+                                      <Box sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        width: 40,
+                                        height: 40,
+                                        bgcolor: isExpanded ? "#4caf50" : "#e0e0e0",
+                                        borderRadius: "50%",
+                                        color: isExpanded ? "white" : "#666",
+                                        fontWeight: 700,
+                                        fontSize: "1.5rem",
+                                        ml: 2,
+                                        flexShrink: 0
+                                      }}>
+                                        {isExpanded ? "−" : "+"}
+                                      </Box>
+                                    )}
                                   </Stack>
 
-                                  {action.steps && Array.isArray(action.steps) && (isExpanded || action.steps.length <= 3) && (
+                                  {action?.steps && Array.isArray(action.steps) && (isExpanded || action.steps.length <= 3) && (
                                     <Box sx={{ mt: 2 }}>
                                       <Box component="ol" sx={{ pl: 3, m: 0, listStyleType: "decimal" }}>
                                         {isExpanded ? (
@@ -501,6 +460,45 @@ export default function ExitStrategyPage() {
             </Box>
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Draft Post Modal */}
+      <Dialog
+        open={draftPostOpen}
+        onClose={() => setDraftPostOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          Draft Post for {draftCharityName}
+          <Button onClick={() => setDraftPostOpen(false)} sx={{ minWidth: "auto" }}>✕</Button>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {copySuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              ✓ Copied to clipboard!
+            </Alert>
+          )}
+          <TextField
+            fullWidth
+            multiline
+            rows={8}
+            value={draftPostText}
+            onChange={(e) => setDraftPostText(e.target.value)}
+            variant="outlined"
+            placeholder="Draft post will appear here..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDraftPostOpen(false)}>Cancel</Button>
+          <Button
+            onClick={copyToClipboard}
+            variant="contained"
+            startIcon={copySuccess ? <Check /> : <ContentCopy />}
+          >
+            {copySuccess ? "Copied!" : "Copy to Clipboard"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );
