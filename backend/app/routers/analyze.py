@@ -191,6 +191,7 @@ async def analyze_fridge_photo(
                 added_date=date.today(),
                 purchase_date=date.today(),
                 visual_hazard=is_hazardous,
+                visual_verified=True,  # Items from photo analysis are visually verified
                 ai_freshness_score=ens_score
             )
             created = await inventory_service.add_item(user_id, item)
@@ -285,6 +286,7 @@ async def analyze_receipt(
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=item_added_date,
                 purchase_date=purchase_date,  # Use extracted receipt date
+                visual_verified=True,  # Items from receipt analysis are visually verified
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
@@ -328,6 +330,7 @@ async def analyze_barcode(
             barcode=barcode,
             added_date=date.today(),
             purchase_date=date.today(),  # Barcode: assume today
+            visual_verified=True,  # Items from barcode analysis are visually verified
         )
         created_item = await inventory_service.add_item(user_id, item)
 
@@ -408,6 +411,7 @@ async def analyze_voice_input(
                 is_perishable=raw_item.get("is_perishable", True),
                 added_date=date.today(),
                 purchase_date=parsed_purchase,
+                visual_verified=False,  # Voice input is just text, no visual verification
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))

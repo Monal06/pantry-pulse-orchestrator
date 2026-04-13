@@ -211,7 +211,7 @@ class SmartDecisionEngine:
     # ========================================================================
 
     async def _generate_upcycle_recommendation(
-        self, item_name: str, category: str, score: float, visual_hazard: bool = False
+        self, item_name: str, category: str, score: float, visual_hazard: bool = False, visual_verified: bool = False
     ) -> ExitPathRecommendation:
         """
         Generate upcycle recommendation for non-food uses only.
@@ -254,6 +254,8 @@ class SmartDecisionEngine:
         })
 
         warnings = []
+        if not visual_verified:
+            warnings.append("⚠️ Item was not visually verified - please inspect before using")
         if score < 30:
             warnings.append("Item is very spoiled - composting or disposal recommended")
         if visual_hazard:
@@ -280,6 +282,7 @@ class SmartDecisionEngine:
         unit: str,
         location: str = "Galway",
         visual_hazard: bool = False,
+        visual_verified: bool = False,
         verified_age_days: Optional[int] = None,
     ) -> Optional[ExitPathRecommendation]:
         """
@@ -328,6 +331,8 @@ class SmartDecisionEngine:
             })
 
         warnings = []
+        if not visual_verified:
+            warnings.append("⚠️ Item was not visually verified - charities may require visual inspection before accepting")
         if score < 50:
             warnings.append("Item is critical freshness - ensure packaging is sealed before donating")
 
@@ -697,6 +702,7 @@ class SmartDecisionEngine:
         location: str = "Galway",
         user_context: Optional[dict] = None,
         visual_hazard: bool = False,
+        visual_verified: bool = False,
         verified_age_days: Optional[int] = None,
     ) -> SmartDecisionResult:
         """
@@ -731,7 +737,7 @@ class SmartDecisionEngine:
 
         # UPCYCLE: Non-food reuse only (composting, crafts, beauty uses)
         upcycle = await self._generate_upcycle_recommendation(
-            item_name, category, freshness_score, visual_hazard=visual_hazard
+            item_name, category, freshness_score, visual_hazard=visual_hazard, visual_verified=visual_verified
         )
         recommendations.append(upcycle)
 
@@ -744,6 +750,7 @@ class SmartDecisionEngine:
             unit,
             location,
             visual_hazard=visual_hazard,
+            visual_verified=visual_verified,
             verified_age_days=verified_age_days,
         )
         if share:

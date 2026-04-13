@@ -94,6 +94,7 @@ class PantryItemBase(BaseModel):
     notes: Optional[str] = None
     price: Optional[float] = None
     visual_hazard: bool = False
+    visual_verified: bool = False  # True if analyzed from photo/receipt, False if manually entered
     ai_freshness_score: Optional[float] = None
 
 
@@ -112,6 +113,7 @@ class PantryItemUpdate(BaseModel):
     notes: Optional[str] = None
     price: Optional[float] = None
     visual_hazard: Optional[bool] = None
+    visual_verified: Optional[bool] = None
     ai_freshness_score: Optional[float] = None
 
 
@@ -123,6 +125,7 @@ class PantryItem(PantryItemBase):
     freshness_score: float = 100.0
     freshness_status: FreshnessCategory = FreshnessCategory.GOOD
     visual_hazard: bool = False
+    visual_verified: bool = False
     expires_on: Optional[date] = None
     days_remaining: Optional[int] = None
     created_at: Optional[datetime] = None
@@ -172,6 +175,7 @@ class PantryItem(PantryItemBase):
             added_date=added,
             purchase_date=purchase,
             visual_hazard=visual_hazard,
+            visual_verified=row.get("visual_verified", False),
             ai_freshness_score=row.get("ai_freshness_score"),
             freshness_score=score,
             freshness_status=freshness_category(score),
