@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import {
   Box, Typography, Card, CardContent, Button, Chip, CircularProgress,
-  Snackbar, Alert, Stack,
+  Snackbar, Alert, Stack, Tabs, Tab
 } from "@mui/material";
 import { Restaurant, CalendarMonth, Favorite, FavoriteBorder, AutoAwesome, MonitorHeart } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { getMealSuggestions, recordCookedMeal, saveRecipe, generateMetabolicPlan, getInventory } from "../api";
+import WeeklyPlanPage from "./WeeklyPlanPage";
 
 class MealsStore {
   meals: any[] = [];
@@ -130,6 +131,7 @@ export default function MealsPage() {
   const [tips, setTips] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loadingIndex, setLoadingIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState(0);
   
   useEffect(() => {
     return mealsStore.subscribe(() => {
@@ -187,17 +189,21 @@ export default function MealsPage() {
   return (
     <Box>
       <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Meal Suggestions</Typography>
+        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Meals & Planning</Typography>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" startIcon={<CalendarMonth />} onClick={() => navigate("/weekly-plan")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
-            Weekly Plan
-          </Button>
           <Button variant="outlined" startIcon={<Favorite />} onClick={() => navigate("/recipes")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
             Saved
           </Button>
         </Stack>
       </Box>
 
+      <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} sx={{ mb: 3 }}>
+        <Tab label="Today's Meal Suggestions" />
+        <Tab label="Weekly Plan" />
+      </Tabs>
+
+      {activeTab === 0 && (
+      <Box>
       {summary && (
         <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 3 }}>
           {summary.critical_items > 0 && (
@@ -323,6 +329,12 @@ export default function MealsPage() {
             ))}
           </CardContent>
         </Card>
+      )}
+      </Box>
+      )}
+
+      {activeTab === 1 && (
+        <WeeklyPlanPage />
       )}
 
       <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar("")}>

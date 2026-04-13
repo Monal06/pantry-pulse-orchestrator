@@ -7,12 +7,12 @@ import {
   DialogTitle,
 } from "@mui/material";
 import {
-  CameraAlt, Receipt, QrCodeScanner, Mic, Edit, CloudUpload,
+  CameraAlt, Receipt, Mic, Edit, CloudUpload,
   Stop, DeleteOutline, Send, Camera, Close,
 } from "@mui/icons-material";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  analyzeFridgePhoto, analyzeReceipt, analyzeBarcode,
+  analyzeFridgePhoto, analyzeReceipt,
   addManualItem, analyzeVoiceInput, confirmReceiptItems,
 } from "../api";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
@@ -31,22 +31,71 @@ const CATEGORIES = [
 const TABS = [
   { label: "Photo", icon: <CameraAlt /> },
   { label: "Receipt", icon: <Receipt /> },
-  { label: "Barcode", icon: <QrCodeScanner /> },
   { label: "Voice", icon: <Mic /> },
   { label: "Manual", icon: <Edit /> },
+];
+
+const FUN_ANALYSIS_MESSAGES = [
+  "Squinting at your fridge contents...",
+  "Counting the carrot sticks...",
+  "Is that a leftover pizza I see?",
+  "Scanning for sentient broccoli...",
+  "Reading the fine print on that digital receipt...",
+  "Consulting the Freshness Oracle...",
+  "Calculating the half-life of your spinach...",
+  "Matching items with our food database...",
+  "Checking if the yogurt has started a revolution...",
+  "Decrypting receipt hieroglyphics...",
+  "Sniffing out the best-before dates...",
+  "Wait, was that a dragon fruit or just a cool rock?",
+  "Analyzing the crispiness factor...",
+  "Organizing your digital pantry shelves...",
+  "Asking the AI if an apple a day still works...",
+  "Verifying that your lettuce isn't planning an escape...",
+  "Converting calories into cold hard data...",
+  "Checking if those eggs are still feeling sunny...",
+  "Bargaining with the bananas for one more day...",
+  "Telling the milk to keep it cool...",
+  "Searching for the lost island of Tupperware lids...",
+  "Wait—did that cucumber just wink at me?",
+  "Investigating the suspicious moisture in the vegetable drawer...",
+  "Cross-referencing your diet with your bank account...",
+  "AI is currently debating the difference between a fruit and a berry...",
+  "Calculating how many smoothies this spinach can survive...",
+  "Checking if the cheese has developed its own personality...",
+  "Analyzing the existential dread of that single grape...",
+  "Asking the fridge why the light really goes out...",
+  "Scanning for hidden chocolate stashes...",
+  "Trying to remember if tomatoes belong in the fridge (they don't!)...",
+  "Checking if your kale is organic or just pretentious...",
+  "Listening to the sizzle in your imagination...",
+  "Plotting the ultimate leftover resurrection...",
+  "Applying quantum physics to your grocery bill...",
+  "Determining if that's a condiment or a science project...",
+  "Checking with the butter to see if it's feeling smooth...",
+  "Consulting the ghost of Julia Child...",
+  "Scanning for secret ingredients—mostly love and salt...",
+  "Wait, I think I found a forgotten lime in the back...",
+  "Attempting to translate 'Product of Earth'...",
+  "Ensuring your avocados don't ripen all at once (good luck!)...",
+  "Mapping the snack-zone topology...",
+  "Wrestling with the wrapper of mystery leftovers...",
+  "AI is wondering why humans love sourdough so much...",
+  "Cataloging your collection of half-empty pickle jars..."
 ];
 
 export default function AddItemsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const modeMap: Record<string, number> = { photo: 0, fridge: 0, receipt: 1, barcode: 2, voice: 3, manual: 4 };
+  const modeMap: Record<string, number> = { photo: 0, fridge: 0, receipt: 1, voice: 2, manual: 3 };
   const modeParam = searchParams.get("mode");
   const isDirectMode = !!modeParam;
-  const [tab, setTab] = useState(modeMap[modeParam || "manual"] ?? 4);
+  const [tab, setTab] = useState(modeMap[modeParam || "manual"] ?? 3);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [snackbar, setSnackbar] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [loadingIndex, setLoadingIndex] = useState(0);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("other");
@@ -136,19 +185,7 @@ export default function AddItemsPage() {
     }
   };
 
-  const handleBarcodeLookup = async () => {
-    if (!barcodeInput.trim()) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const data = await analyzeBarcode(barcodeInput.trim());
-      setResult(data);
-    } catch (e: any) {
-      setSnackbar(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleVoiceSubmit = async () => {
     const text = (voice.transcript || voiceText).trim();
@@ -335,6 +372,17 @@ export default function AddItemsPage() {
     }
   }, [cameraOpen, stream]);
 
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+      setLoadingIndex(Math.floor(Math.random() * FUN_ANALYSIS_MESSAGES.length));
+      interval = setInterval(() => {
+        setLoadingIndex((prev) => (prev + 1) % FUN_ANALYSIS_MESSAGES.length);
+      }, 2500);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
@@ -439,34 +487,9 @@ export default function AddItemsPage() {
         </Card>
       )}
 
-      {tab === 2 && (
-        <Card>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Barcode Lookup</Typography>
-            <Typography color="text.secondary" sx={{ mb: 4, fontSize: "1.1rem" }}>
-              Enter a product barcode (EAN/UPC) to look it up in the Open Food Facts database.
-            </Typography>
-            <Stack direction="row" spacing={2} alignItems="flex-start">
-              <TextField
-                label="Barcode"
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                sx={{ flex: 1 }}
-              />
-              <Button
-                variant="contained"
-                onClick={handleBarcodeLookup}
-                disabled={loading || !barcodeInput.trim()}
-                size="large"
-              >
-                Look Up
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
 
-      {tab === 3 && (
+
+      {tab === 2 && (
         <Card>
           <CardContent sx={{ p: 4 }}>
             <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Voice Input</Typography>
@@ -607,7 +630,7 @@ export default function AddItemsPage() {
         </Card>
       )}
 
-      {tab === 4 && (
+      {tab === 3 && (
         <Card>
           <CardContent sx={{ p: 4 }}>
             <Typography variant="h5" fontWeight={800} gutterBottom sx={{ letterSpacing: "-0.01em" }}>Add Manually</Typography>
@@ -706,8 +729,8 @@ export default function AddItemsPage() {
               {/* Analysis status */}
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, py: 2 }}>
                 <CircularProgress size={48} />
-                <Typography fontWeight={600} sx={{ mt: 2 }}>
-                  Analyzing with AI...
+                <Typography fontWeight={700} color="primary" sx={{ mt: 2, textAlign: "center" }}>
+                  {FUN_ANALYSIS_MESSAGES[loadingIndex]}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, textAlign: "center" }}>
                   Identifying items and checking freshness

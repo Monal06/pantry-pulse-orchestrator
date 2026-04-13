@@ -312,14 +312,16 @@ async def suggest_meals(
     dietary_prompt: str = "No dietary restrictions.",
     household_size: int = 1,
 ) -> list[dict]:
-    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False) and i.get("freshness_score", 100) > 0]
+    spoiled_items = [i for i in inventory_items if i.get("visual_hazard", False) or i.get("freshness_score", 100) <= 0]
+    
     good_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 70]
-    use_soon_items = [i for i in safe_inventory if 50 <= i.get("freshness_score", 100) < 70]
-    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
+    use_soon_items = [i for i in safe_inventory if 40 <= i.get("freshness_score", 100) < 70]
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 40]
 
     inventory_summary = ""
     if critical_items:
-        inventory_summary += "CRITICAL - Must use immediately:\n"
+        inventory_summary += "CRITICAL - Use extremely soon:\n"
         for item in critical_items:
             inventory_summary += f"  - {item['name']} (freshness: {item['freshness_score']}%, {item['quantity']} {item['unit']})\n"
     if use_soon_items:
@@ -330,6 +332,11 @@ async def suggest_meals(
         inventory_summary += "\nGOOD - Available for any meal:\n"
         for item in good_items:
             inventory_summary += f"  - {item['name']} ({item['quantity']} {item['unit']})\n"
+    
+    if spoiled_items:
+        inventory_summary += "\nUNSAFE / DISCARD - DO NOT USE FOR HUMAN CONSUMPTION:\n"
+        for item in spoiled_items:
+            inventory_summary += f"  - {item['name']} (REASON: Spoilage/Hazard detected)\n"
 
     portion_note = f"Portions should serve {household_size} person(s)." if household_size > 0 else ""
 
@@ -340,17 +347,18 @@ DIETARY REQUIREMENTS (MUST follow strictly - never suggest meals that violate th
 {portion_note}
 
 RULES:
-1. PRIORITIZE items marked CRITICAL - these MUST be used in at least one meal
-2. Items marked USE SOON should be incorporated into meals where possible
-3. For CRITICAL items (freshness below 50%), also suggest alternative uses to prevent waste (e.g. overripe bananas -> banana bread, wilting herbs -> pesto, soft tomatoes -> sauce)
-4. Meals should be practical and achievable for a home cook
-5. Use mainly ingredients from the inventory
-6. NEVER suggest meals containing ingredients that violate the dietary requirements above
+1. PRIORITIZE items marked USE SOON - incorporate these where possible.
+2. Items marked CRITICAL should be used carefully; suggest alternative uses to prevent waste (e.g. overripe bananas -> banana bread).
+3. SAFETY: NEVER suggest meals using items from the UNSAFE/DISCARD list.
+4. If a meal requires an ingredient NOT in the inventory, list it clearly in the ingredients.
+5. Meals should be practical and achievable for a home cook.
+6. Use mainly ingredients from the inventory.
+7. NEVER suggest meals containing ingredients that violate the dietary requirements above.
 
 INVENTORY:
 {inventory_summary}
 
-Return JSON:
+Return JSON in this exact format:
 {{
   "meals": [
     {{
@@ -423,13 +431,21 @@ async def generate_weekly_meal_plan(
     household_size: int = 1,
 ) -> dict[str, Any]:
     """Generate a 7-day meal plan projecting freshness forward."""
-    safe_inventory = [item for item in inventory_items if not item.get("visual_hazard", False)]
+    safe_inventory = [item for item in inventory_items if not item.get("visual_hazard", False) and item.get("freshness_score", 100) > 0]
+    spoiled_items = [item for item in inventory_items if item.get("visual_hazard", False) or item.get("freshness_score", 100) <= 0]
+    
     items_summary = ""
     for item in safe_inventory:
         items_summary += (
             f"  - {item['name']} (category: {item['category']}, freshness: {item.get('freshness_score', 100)}%, "
             f"qty: {item['quantity']} {item['unit']}, storage: {item.get('storage', 'fridge')})\n"
         )
+    
+    waste_summary = ""
+    if spoiled_items:
+        waste_summary = "\nUNSAFE / DISCARD (DO NOT USE):\n"
+        for item in spoiled_items:
+            waste_summary += f"  - {item['name']} (REASON: Spoilage detected)\n"
 
     prompt = f"""You are a meal planning expert minimizing food waste. Create a 7-day meal plan.
 
@@ -439,6 +455,7 @@ Portions for {household_size} person(s).
 
 CURRENT INVENTORY:
 {items_summary}
+{waste_summary}
 
 RULES:
 1. Schedule meals so that items with the LOWEST freshness are used FIRST (day 1-2)
@@ -446,7 +463,8 @@ RULES:
 3. Each day should have breakfast, lunch, and dinner
 4. Minimize the need for external ingredients - use what's in the pantry
 5. NEVER violate dietary requirements
-6. By the end of the week, most perishable items should be used
+6. SAFETY: NEVER suggest ingredients from the UNSAFE / DISCARD list. If common ingredients like bread are spoiled, pivot to other options.
+7. By the end of the week, most perishable items should be used
 
 Return JSON:
 {{
@@ -607,17 +625,25 @@ async def generate_metabolic_recipe(
       2. Biometric state of the user.
       3. User profile goals/restrictions.
     """
-    # Separate inventory by freshness constraint and exclude items with visual hazards
-    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False)]
-    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 50]
-    stable_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 50]
+    # Separate inventory by freshness constraint and exclude items with visual hazards or 0 score
+    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False) and i.get("freshness_score", 100) > 0]
+    spoiled_items = [i for i in inventory_items if i.get("visual_hazard", False) or i.get("freshness_score", 100) <= 0]
     
-    inv_summary = "CRITICAL (Must Use):\n"
+    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 40]
+    stable_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 40]
+    
+    inv_summary = "CRITICAL (Use Now):\n"
     for i in critical_items:
         inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
-    inv_summary += "\nSTABLE (Can Use):\n"
+    inv_summary += "\nSTABLE (Available):\n"
     for i in stable_items:
         inv_summary += f"  - {i.get('name', 'Unknown')} (score: {i.get('freshness_score')})\n"
+    
+    waste_summary = ""
+    if spoiled_items:
+        waste_summary = "\nUNSAFE / DISCARD (DO NOT USE):\n"
+        for i in spoiled_items:
+            waste_summary += f"  - {i.get('name', 'Unknown')} (REASON: Mold/Spoilage detected)\n"
 
     prompt = f"""You are the 'Metabolic Guard', an elite constraint-driven cooking AI.
 Your goal is to suggest THREE highly optimized meal recipes that perfectly balance the user's BIOLOGICAL NEEDS with their INVENTORY CONSTRAINTS.
@@ -630,16 +656,20 @@ CURRENT BIOMETRIC STATE:
 
 INVENTORY:
 {inv_summary}
+{waste_summary}
 
 RULES:
 1. BIOMETRIC ALIGNMENT: 
    - If Sleep/Readiness is low or Stress is high, use ingredients rich in recovery nutrients (magnesium, complex carbs, antioxidants).
    - If Steps are high, provide sufficient protein/carbs for recovery.
 2. CIRCULAR OPTIMIZATION:
-   - You MUST utilize at least some items from the "CRITICAL" inventory list to prevent food waste.
+   - You SHOULD utilize items from the "CRITICAL" inventory list to prevent food waste.
    - You may use "STABLE" items to round out the nutritional profile.
-3. STRICT DIETARY ADHERENCE: Never violate the user's dietary restrictions or fitness goals.
-4. VARIED SUGGESTIONS: Ensure the three recipes offer different flavors or types of meals (e.g. one breakfast-style, one lunch, one dinner, or different cuisines).
+3. SAFETY HARD-STOP:
+   - NEVER suggest recipes that utilize items from the "UNSAFE / DISCARD" list. 
+   - If common staples (like bread) are in the DISCARD list, proactively suggest recipes that DO NOT require those staples (e.g. "lettuce wraps" instead of "sandwiches").
+4. STRICT DIETARY ADHERENCE: Never violate the user's dietary restrictions or fitness goals.
+5. VARIED SUGGESTIONS: Ensure the three recipes offer different flavors or types of meals.
 
 Return JSON in this EXACT format:
 {{

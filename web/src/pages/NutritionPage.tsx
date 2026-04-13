@@ -11,6 +11,23 @@ const STATUS_COLORS: Record<string, string> = {
   low: "#F44336",
 };
 
+const QUIRKY_TEXTS = [
+  "Consulting the Broccoli Elders...",
+  "Negotiating with your leftover pizza...",
+  "Measuring the exact length of your celery stalks...",
+  "Asking the fridge if it's happy...",
+  "Calculating the velocity of an unswallowed vitamin...",
+  "Convincing the kale it's delicious...",
+  "Analyzing the nutritional value of your hopes and dreams...",
+  "Indexing your snack drawer's dark matter...",
+  "Scanning for sentient yogurt cultures...",
+  "Checking if the apples are still looking fresh...",
+  "Aggregating vitamins like Pokémon...",
+  "Counting the fiber in your digital diet...",
+  "Calibrating the 'Is it edible?' sensor...",
+  "Summoning the spirits of forgotten groceries...",
+];
+
 function scoreColor(score: number): string {
   if (score >= 70) return "#4CAF50";
   if (score >= 40) return "#FF9800";
@@ -20,10 +37,12 @@ function scoreColor(score: number): string {
 export default function NutritionPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState(QUIRKY_TEXTS[0]);
   const [snackbar, setSnackbar] = useState("");
 
   const loadAnalysis = async () => {
     setLoading(true);
+    setLoadingText(QUIRKY_TEXTS[Math.floor(Math.random() * QUIRKY_TEXTS.length)]);
     try {
       const result = await getNutritionalBalance();
       setData(result);
@@ -48,14 +67,19 @@ export default function NutritionPage() {
         {data ? "Refresh Analysis" : "Analyze Nutritional Balance"}
       </Button>
 
-      {loading && !data && (
+      {loading && (
         <Box sx={{ textAlign: "center", py: 4 }}>
           <CircularProgress />
-          <Typography color="text.secondary" sx={{ mt: 2 }}>Analyzing your nutrition...</Typography>
+          <Typography
+            color="text.secondary"
+            sx={{ mt: 2, fontStyle: "italic" }}
+          >
+            {loadingText}
+          </Typography>
         </Box>
       )}
 
-      {data && (
+      {data && !loading && (
         <>
           <Card sx={{ mb: 2, bgcolor: "#F1F8E9" }}>
             <CardContent sx={{ textAlign: "center" }}>

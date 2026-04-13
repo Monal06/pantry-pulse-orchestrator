@@ -6,8 +6,7 @@ import {
   AppBar, Toolbar, Typography, IconButton, useMediaQuery, Divider,
 } from "@mui/material";
 import {
-  Kitchen, Restaurant, CalendarMonth, ShoppingCart, BarChart,
-  People, Home, FoodBank, Favorite, Settings, Menu as MenuIcon,
+  Kitchen, Restaurant, BarChart, FoodBank, Favorite, Settings, Menu as MenuIcon,
   SpaOutlined,
 } from "@mui/icons-material";
 import { theme } from "./theme";
@@ -16,12 +15,8 @@ import InventoryPage from "./pages/InventoryPage";
 import AddItemsPage from "./pages/AddItemsPage";
 import ExitStrategyPage from "./pages/ExitStrategyPage";
 import MealsPage from "./pages/MealsPage";
-import WeeklyPlanPage from "./pages/WeeklyPlanPage";
-import ShoppingPage from "./pages/ShoppingPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
-import CommunityPage from "./pages/CommunityPage";
-import HouseholdPage from "./pages/HouseholdPage";
 import RecipesPage from "./pages/RecipesPage";
 import NutritionPage from "./pages/NutritionPage";
 
@@ -31,14 +26,10 @@ const NAV_ITEMS = [
   { path: "/", label: "Pantry", icon: <Kitchen /> },
   { path: "/exit-strategy", label: "Give It a New Life", icon: <BarChart /> },
   { path: "/meals", label: "Meals", icon: <Restaurant /> },
-  { path: "/weekly-plan", label: "Weekly Plan", icon: <CalendarMonth /> },
-  { path: "/shopping", label: "Shopping", icon: <ShoppingCart /> },
-  { path: "/dashboard", label: "Impact", icon: <BarChart /> },
   { divider: true },
+  { path: "/dashboard", label: "Impact", icon: <BarChart /> },
   { path: "/recipes", label: "Saved Recipes", icon: <Favorite /> },
   { path: "/nutrition", label: "Nutrition", icon: <SpaOutlined /> },
-  { path: "/community", label: "Community", icon: <People /> },
-  { path: "/household", label: "Household", icon: <Home /> },
   { path: "/profile", label: "Diet Profile", icon: <Settings /> },
 ] as const;
 
@@ -139,12 +130,8 @@ function AppLayout() {
             <Route path="/add-items" element={<AddItemsPage />} />
             <Route path="/exit-strategy" element={<ExitStrategyPage />} />
             <Route path="/meals" element={<MealsPage />} />
-            <Route path="/weekly-plan" element={<WeeklyPlanPage />} />
-            <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/community" element={<CommunityPage />} />
-            <Route path="/household" element={<HouseholdPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
             <Route path="/nutrition" element={<NutritionPage />} />
           </Routes>
