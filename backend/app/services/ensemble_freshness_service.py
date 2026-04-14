@@ -335,12 +335,14 @@ async def run_ensemble_analysis(
         purchase_date=purchase_date,
         visual_score=ensemble_score,
         visual_confidence=confidence,
+        item_name=food_name,
     )
 
     days_remaining = bayesian_freshness_service.predict_days_remaining(
         current_score=bayes["posterior_score"],
         category=food_category,
         storage=storage,
+        item_name=food_name,
     )
     ci_lower, ci_upper = bayesian_freshness_service.compute_confidence_interval(
         bayes["posterior_score"],
@@ -425,6 +427,7 @@ async def run_ensemble_analysis(
             "visual_weight":            bayes["visual_weight"],
             "decay_rate":               decay_label,
             "decay_rate_value":         bayes["decay_rate"],
+            "foodkeeper_match":         bayes.get("foodkeeper_match", False),
         },
         "llm_reasoning": llm_reasoning,  # None if Groq unavailable
         "weights_used": {

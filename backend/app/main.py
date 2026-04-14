@@ -12,6 +12,14 @@ from app.config import get_settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup diagnostics
+    settings = get_settings()
+    keys = settings.get_all_gemini_keys()
+    models = [m.strip() for m in settings.gemini_models.split(",") if m.strip()]
+    print(f"[STARTUP] Gemini API keys loaded: {len(keys)}")
+    for i, k in enumerate(keys):
+        print(f"  Key {i+1}: ...{k[-8:]}")
+    print(f"[STARTUP] Model fallback order: {models}")
     yield
 
 

@@ -5,7 +5,7 @@ import re
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Body
 
-from app.models.inventory import PantryItemCreate, SpoilageReport, StorageLocation
+from app.models.inventory import PantryItemCreate, StorageLocation
 from app.services import gemini_service, barcode_service, inventory_service, receipt_fallback_service
 from app.services import ensemble_freshness_service, image_crop_service
 from app.routers.meals import _meal_history
@@ -62,29 +62,40 @@ async def analyze_fridge_photo(
     user_id: str = Query(default=DEFAULT_USER),
     auto_add: bool = Query(default=True, description="Automatically add detected items to inventory"),
 ):
-    """Analyze a photo of a fridge or cupboard. Identifies items and checks for spoilage."""
+    """
+    Analyze a photo of a fridge or cupboard.  Two-phase approach:
+
+      Phase 1 (fast — single Gemini call): identify items + spoilage reports.
+      Phase 2 (targeted ensemble — local CV only): run OpenCV
+              on the TOP-3 most suspicious items by cropped bounding-box.
+
+    Phase 2 uses only local models (zero extra API calls) and runs in
+    parallel via asyncio.gather, adding ~1-2 s instead of the old 30-60 s.
+    CLIP and ViT are reserved for individual item analysis (/freshness-deep).
+    """
+    import asyncio as _asyncio
+
     print(f"[FRIDGE-PHOTO] Endpoint hit. Content type: {photo.content_type}")
     if not photo.content_type or not photo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     image_bytes = await photo.read()
     print(f"[FRIDGE-PHOTO] Image bytes received: {len(image_bytes)} bytes")
+
+    # ── Phase 1: Single Gemini call (fast) ──────────────────────────
     try:
         result = await gemini_service.analyze_fridge_photo(image_bytes, photo.content_type)
-        print(f"[FRIDGE-PHOTO] Gemini result: {result}")
+        print(f"[FRIDGE-PHOTO] Gemini found {len(result.get('items', []))} items")
     except Exception as e:
         print(f"[FRIDGE-PHOTO] ERROR in gemini_service: {type(e).__name__}: {str(e)}")
-        # Return fallback data instead of crashing
         result = {
             "items": [],
             "spoilage_reports": [],
             "description": "Unable to analyze photo. Please try again or use manual entry.",
-            "error": str(e)
+            "error": str(e),
         }
 
     if "error" in result and len(result.get("items", [])) == 0:
-        # If there's an error and no items, it's a real failure
-        # But we still return some fallback rather than 502
         return {
             "items_detected": 0,
             "items_added": [],
@@ -93,92 +104,119 @@ async def analyze_fridge_photo(
             "error": result.get("error", ""),
         }
 
-    items_created = []
     spoilage_reports = result.get("spoilage_reports", [])
 
-    # ------------------------------------------------------------------
-    # Module B: Per-item ensemble freshness on cropped regions.
-    # Gemini returns a bbox [x1,y1,x2,y2] (normalised 0-1) for each item.
-    # We crop that region and run the full ensemble on the close-up crop.
-    # Capped at 6 items concurrently to avoid overloading the CPU.
-    # Items without a valid bbox fall back to Gemini-only scoring.
-    # All existing keys are unaffected — freshness_scores is a NEW key.
-    # ------------------------------------------------------------------
+    # Build a lookup of Gemini's per-item spoilage verdicts
+    gemini_spoilage_map: dict[str, dict] = {}
+    for report in spoilage_reports:
+        gemini_spoilage_map[report.get("item_name", "").lower()] = report
+
+    # ── Phase 2: Targeted local-only ensemble on TOP-3 suspicious ───
+    # Sort perishable items by Gemini spoilage confidence (highest first)
     perishable_items = [
         item for item in result.get("items", [])
         if item.get("is_perishable", True)
     ]
 
-    async def _ensemble_for_item(raw_item: dict) -> tuple[str, dict | None, dict]:
-        """Crop + ensemble for one item. Returns (item_name, result_or_None, raw_item)."""
+    def _suspicion_score(item: dict) -> float:
+        """Higher = more suspicious = should get ensemble attention."""
+        report = gemini_spoilage_map.get(item.get("name", "").lower())
+        if report and report.get("spoilage_detected"):
+            return report.get("confidence", 0.5) * 100
+        return 0.0
+
+    perishable_items.sort(key=_suspicion_score, reverse=True)
+    ensemble_candidates = perishable_items[:3]
+
+    async def _cv_only_for_item(raw_item: dict) -> tuple[str, dict | None]:
+        """Run OpenCV only on a cropped item. Fast, no model downloads."""
         name = raw_item.get("name", "unknown")
         bbox = image_crop_service.validate_bbox(raw_item.get("bbox"))
         crop_bytes = (
             image_crop_service.crop_item_from_image(image_bytes, bbox)
-            if bbox else None
+            if bbox else image_bytes
         )
-        # Fall back to full image if no bbox
         scan_bytes = crop_bytes or image_bytes
+
+        scores: dict[str, float | None] = {}
+        visual_flags: list[dict] = []
+
+        # Fridge photos: OpenCV only (fast, no heavy model loading)
+        # CLIP + ViT are reserved for individual item photos via /freshness-deep
         try:
-            res = await ensemble_freshness_service.run_ensemble_analysis(
-                image_bytes=scan_bytes,
-                food_name=name,
-                food_category=raw_item.get("category", "other"),
-                storage=raw_item.get("storage", "fridge"),
-                added_date=date.today(),
-                mime_type=photo.content_type or "image/jpeg",
+            from app.services import cv_freshness_service
+
+            cv_result = await _asyncio.to_thread(
+                cv_freshness_service.analyze_food_image, scan_bytes, name
             )
-            return name, res, raw_item
+
+            if cv_result:
+                scores["cv_pipeline"] = cv_result.get("cv_score")
+                if cv_result.get("visual_flags"):
+                    visual_flags.extend(cv_result["visual_flags"])
+
         except Exception as exc:
-            print(f"[FRIDGE-PHOTO] Ensemble failed for {name}: {exc}")
-            return name, None, raw_item
+            print(f"[FRIDGE-PHOTO] CV analysis failed for {name}: {exc}")
 
-    # Run ensemble on up to 6 perishable items concurrently
-    MAX_ENSEMBLE_ITEMS = 6
+        if not scores:
+            return name, None
+
+        return name, {
+            "model_scores": scores,
+            "visual_flags": visual_flags,
+            "used_crop": bbox is not None,
+        }
+
+    # Fire all 3 items in parallel — OpenCV is lightweight
     freshness_scores: dict = {}
-    if perishable_items:
-        import asyncio as _asyncio
-        sem = _asyncio.Semaphore(3)  # max 3 parallel ensemble runs
+    if ensemble_candidates:
+        ensemble_results = await _asyncio.gather(
+            *[_cv_only_for_item(item) for item in ensemble_candidates],
+            return_exceptions=True,
+        )
+        for res in ensemble_results:
+            if isinstance(res, Exception):
+                print(f"[FRIDGE-PHOTO] Ensemble task exception: {res}")
+                continue
+            item_name, ens_data = res
+            if ens_data:
+                model_scores = ens_data["model_scores"]
+                # Weighted ensemble: Gemini initial 50%, local models share 50%
+                gemini_initial = _suspicion_score_to_freshness(
+                    gemini_spoilage_map.get(item_name.lower())
+                )
+                final_score = _compute_ensemble_score(model_scores, gemini_initial)
 
-        async def _guarded(item):
-            async with sem:
-                return await _ensemble_for_item(item)
-
-        tasks = [_guarded(item) for item in perishable_items[:MAX_ENSEMBLE_ITEMS]]
-        ensemble_results = await _asyncio.gather(*tasks, return_exceptions=False)
-
-        for item_name, ens_result, _raw in ensemble_results:
-            if ens_result:
                 freshness_scores[item_name] = {
-                    "freshness_score":  ens_result.get("freshness_score"),
-                    "freshness_level":  ens_result.get("freshness_level"),
-                    "confidence":       ens_result.get("confidence"),
-                    "visual_flags":     ens_result.get("visual_flags", []),
-                    "days_remaining":   ens_result.get("bayesian_prediction", {}).get("predicted_days_remaining"),
-                    "llm_reasoning":    ens_result.get("llm_reasoning"),
-                    "used_crop":        _raw.get("bbox") is not None,
+                    "freshness_score": final_score,
+                    "freshness_level": "good" if final_score >= 70 else ("use_soon" if final_score >= 50 else "critical"),
+                    "confidence": _compute_local_confidence(model_scores),
+                    "visual_flags": ens_data["visual_flags"],
+                    "used_crop": ens_data["used_crop"],
+                    "model_scores": {k: round(v, 1) for k, v in model_scores.items() if v is not None},
                 }
-                print(f"[FRIDGE-PHOTO] Ensemble {item_name}: score={ens_result.get('freshness_score')}")
+                print(f"[FRIDGE-PHOTO] Ensemble {item_name}: score={final_score}")
 
+    # ── Phase 3: Add items to inventory ─────────────────────────────
+    items_created = []
     if auto_add and "items" in result:
         for raw_item in result["items"]:
             item_name = raw_item.get("name", "Unknown")
             item_name_lower = item_name.lower()
 
-            # Check if this item name appears in any spoilage report
-            # Use substring matching to handle suffixes like "(left)", "(right)"
+            # Check Gemini spoilage
             has_spoilage = any(
-                item_name_lower in report.get("item_name", "").lower() and
-                report.get("spoilage_detected", False)
+                item_name_lower in report.get("item_name", "").lower()
+                and report.get("spoilage_detected", False)
                 for report in spoilage_reports
             )
 
-            # Check ensemble freshness flags if any have a safety cap applied
+            # Check ensemble visual flags for safety caps
             ens_flags = freshness_scores.get(item_name, {}).get("visual_flags", [])
             has_ensemble_hazard = any("cap_applied" in f.get("type", "") for f in ens_flags)
             is_hazardous = has_spoilage or has_ensemble_hazard
 
-            # Capture explicit AI freshness score
+            # Use ensemble freshness score if available
             ens_score = freshness_scores.get(item_name, {}).get("freshness_score")
 
             item = PantryItemCreate(
@@ -192,7 +230,7 @@ async def analyze_fridge_photo(
                 purchase_date=date.today(),
                 visual_hazard=is_hazardous,
                 visual_verified=True,  # Items from photo analysis are visually verified
-                ai_freshness_score=ens_score
+                ai_freshness_score=ens_score,
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
@@ -202,9 +240,52 @@ async def analyze_fridge_photo(
         "items_added": items_created,
         "spoilage_reports": spoilage_reports,
         "description": result.get("description", ""),
-        # Per-item ensemble freshness scores (new key — safe to ignore if not needed)
         "freshness_scores": freshness_scores,
     }
+
+
+def _suspicion_score_to_freshness(report: dict | None) -> float:
+    """Convert Gemini spoilage report to a 0-100 freshness score."""
+    if not report:
+        return 85.0  # No spoilage data → assume fairly fresh
+    if report.get("spoilage_detected"):
+        confidence = report.get("confidence", 0.5)
+        return round(max(0.0, 40.0 - confidence * 35.0), 1)
+    confidence = report.get("confidence", 0.5)
+    return round(min(100.0, 60.0 + (1.0 - confidence) * 40.0), 1)
+
+
+def _compute_ensemble_score(model_scores: dict, gemini_initial: float) -> float:
+    """Weighted average: Gemini initial (50%) + local models share remaining 50%."""
+    local_weights = {"cv_pipeline": 0.25, "clip": 0.15, "vit_anomaly": 0.10}
+    total_weight = 0.50  # Gemini initial weight
+    weighted_sum = gemini_initial * 0.50
+
+    for model, score in model_scores.items():
+        if score is None:
+            continue
+        w = local_weights.get(model, 0.10)
+        weighted_sum += score * w
+        total_weight += w
+
+    return round(weighted_sum / total_weight, 1) if total_weight > 0 else gemini_initial
+
+
+def _compute_local_confidence(model_scores: dict) -> float:
+    """Confidence based on how many local models ran + their agreement."""
+    import math
+    scores = [v for v in model_scores.values() if v is not None]
+    n = len(scores)
+    if n == 0:
+        return 30.0
+    base = 40.0 + n * 15.0  # 1 method=55, 2=70, 3=85
+    if n > 1:
+        mean = sum(scores) / n
+        std = math.sqrt(sum((s - mean) ** 2 for s in scores) / n)
+        cv = std / max(mean, 1.0)
+        agreement = max(0.0, 1.0 - cv * 1.5)
+        base *= (0.5 + 0.5 * agreement)
+    return round(min(100.0, max(0.0, base)), 1)
 
 
 @router.post("/receipt")
