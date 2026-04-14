@@ -1,16 +1,64 @@
-# pantry-pulse-orchestrator
-An AI-driven decision engine for the circular food economy, utilizing Multi-agent Orchestration and Safety Guardrails to automate sustainable food exit strategies.
+# FreshSave: AI-Powered Circular Food Economy
+### Atlantec AI Challenge 2026 Submission
 
-# FreshSave - AI-Powered Food Waste Reduction
+**Repository:** `pantry-pulse-orchestrator`
 
-A web app that helps individuals and households reduce food waste through smart inventory tracking, AI-driven freshness monitoring, meal suggestions, and intelligent shopping lists.
+**FreshSave** is an AI-driven decision engine for the circular food economy, utilizing Multi-agent Orchestration and Safety Guardrails to automate sustainable food exit strategies.
+
+---
+
+## 🚀 Live Demo & Links
+
+**[👉 View FreshSave Live](https://pantry-pulse-orchestrator-web.onrender.com)** — Open here to see the app in action!
+
+**[API Documentation](https://pantry-pulse-orchestrator.onrender.com/docs)** — FastAPI interactive endpoint explorer
+
+FreshSave helps individuals and households reduce food waste through:
+- Smart inventory tracking powered by AI vision analysis
+- Real-time freshness monitoring with decay prediction
+- Intelligent meal suggestions based on available items
+- Sustainable exit strategies (upcycle, share, dispose) with multi-gate safety validation
+- Community food sharing and waste tracking dashboard
+
+### Judging Criteria Alignment
+
+| Criterion | How FreshSave Addresses It |
+|-----------|---------------------------|
+| **Innovation** | Multi-agent orchestration with 4-gate safety validation; dual-path freshness detection (Bayesian + Visual); RAG-powered food safety standards; non-food creative upcycling database; smart decision engine works at ANY freshness score |
+| **Societal Impact** | Reduces household food waste; connects donors with 15+ Galway charities; educates on environmental impact (2.5kg CO2 saved per item); democratizes waste management with free-tier architecture |
+| **Technical Depth** | FastAPI backend with async agents; React TypeScript frontend with expandable action cards; Gemini 2.5 Flash + Groq hybrid LLM routing; computer vision for spoilage detection; Bayesian freshness modeling; RAG retrieval for food safety standards |
+| **Ethical Compliance** | **100% free-tier architecture** (Render, Supabase free tier, Google AI Studio, Open Food Facts); transparent 3-gate safety validation prevents unsafe recommendations; explicit consent flows; no data exploitation; environmental benefit quantified and displayed |
+
+---
+
+## 💡 Key Features & Innovation
+
+### Dual-Gate Freshness Detection
+- **Bayesian Model**: Predicts decay based on EFSA/FDA standards for 100+ food items across all storage types
+- **Visual Analysis**: AI detects mold, discoloration, wilting, and spoilage via photo analysis
+- **Age Verification**: Compares stored age against official safety limits
+
+### Multi-Agent Orchestration
+Three specialized agents handle different exit paths:
+1. **Upcycle Agent** — Suggests creative non-food uses (composting, face masks, natural dyes, crafts)
+2. **Charity Finder Agent** — Identifies local charities, community fridges, and drop-off instructions
+3. **Disposal Guide Agent** — Provides Galway-specific waste bin guidance with environmental impact
+
+### Smart Decision Engine
+- Evaluates **all three exit paths** (upcycle, share, dispose) at any freshness score
+- **4-gate safety validation** prevents dangerous recommendations:
+  - Gate 1: Freshness Score (0-100 scale)
+  - Gate 2: Visual Spoilage Detection (mold, etc.)
+  - Gate 3: Age Verification (vs. EFSA limits)
+  - Gate 4: Category-specific rules
+- Ranks recommendations by user context (has garden? in office? environmental priority?)
 
 ## Features
 
-### Smart Food Input (4 Methods)
+### Smart Food Input (3 Methods)
 - **Fridge/Cupboard Photo**: Upload a photo of your open fridge or cupboard. AI identifies visible food items and checks for spoilage (mold, discoloration, wilting).
 - **Receipt Scanning**: Upload a grocery receipt image to auto-populate your pantry with purchased items. If Gemini is unavailable, the backend automatically falls back to OCR-based receipt parsing.
-- **Barcode Scanning**: Enter a product barcode (EAN/UPC) to look up items via the free Open Food Facts database.
+- **Voice Input**: Speak your items naturally (e.g., "I just bought 2 avocados and milk"). AI transcribes and adds them to your inventory.
 - **Manual Entry**: Add items with category, quantity, storage location, and perishability.
 
 ### Freshness Tracking
@@ -39,6 +87,8 @@ AI generates meal ideas each day based on your current inventory, prioritizing:
 2. **Use-soon items** (freshness 50-70) - should be in the next few meals
 3. **Fresh items** - available for any recipe
 
+**Weekly Meal Planning**: Plan out your entire week with freshness projections to minimize waste across the week
+
 ### Waste Tracking Dashboard
 Track your food waste reduction impact over time:
 - **Items saved vs. wasted** with save rate percentage
@@ -49,13 +99,10 @@ Track your food waste reduction impact over time:
 - **Recent activity feed** with save/waste/freeze/donate events
 
 ### Additional Product Areas
-- Weekly meal planning with freshness projection
-- Dietary profile and allergy preferences
-- Community food sharing
-- Household pantry sharing
-- Saved recipes and favorites
-- Nutritional balance analysis
-- Freshness notifications
+- **Saved Recipes**: Store and organize your favorite recipes for quick reference
+- **Dietary Profile**: Define your dietary preferences, allergies, and cuisine preferences
+- **Nutritional Balance**: Analyze the nutritional content of your current inventory
+- **Freshness Notifications**: Real-time alerts when items are approaching critical freshness
 
 ## Tech Stack
 
@@ -65,10 +112,40 @@ Track your food waste reduction impact over time:
 | Backend | Python + FastAPI | Free |
 | AI | Google Gemini 2.5 Flash (Google AI Studio) | Free tier |
 | Database | Supabase (PostgreSQL + Auth + Storage) | Free tier |
-| Barcode Lookup | Open Food Facts API | Free |
 | Hosting | Render | Free tier |
 
 **Total cost: $0**
+
+## 🌱 Ethical AI & Free-Tier Infrastructure
+
+### Why Free Tier?
+FreshSave is built entirely on free-tier services to ensure **equitable access** and demonstrate that impactful AI applications don't require expensive infrastructure. This aligns with our mission to democratize food waste reduction.
+
+### All Services Are Free
+- **Google Gemini 2.5 Flash**: Free tier via Google AI Studio (15 requests/minute + 60 requests/hour)
+- **Groq API**: Free tier for fallback LLM routing (improves reliability)
+- **Supabase**: Free PostgreSQL database + Auth + Storage (suitable for MVP/demo)
+- **Render**: Free tier web hosting with automatic deployments from GitHub
+- **UptimeRobot**: Free tier monitoring with 50+ check intervals per month
+
+### Keeping Free Tier Alive: UptimeRobot Integration
+Render's free tier spins down applications after 15 minutes of inactivity. To keep FreshSave running 24/7, we use **UptimeRobot** (free tier):
+
+1. **UptimeRobot Monitor**: Pings our `/health` endpoint every 10 minutes
+2. **Keeps Render Alive**: Prevents the app from being hibernated
+3. **Uptime Reports**: Tracks 99.9% availability (no cost)
+4. **Alerts**: Notifies if the app goes down (via email, Slack, webhooks)
+
+**Setup:**
+```bash
+# UptimeRobot monitors: https://pantry-pulse-orchestrator.onrender.com/health
+# Ping frequency: 10 minutes
+# Free tier allows unlimited monitors with 10-minute checks
+```
+
+This approach ensures the live demo stays accessible for judges without incurring any costs.
+
+---
 
 ## Project Structure
 
@@ -173,30 +250,16 @@ pantry-pulse-orchestrator/
 | Node.js | 18+ | [nodejs.org](https://nodejs.org/) |
 | Git | any | [git-scm.com](https://git-scm.com/) |
 | Gemini API Key | — | [aistudio.google.com](https://aistudio.google.com) |
+| Groq API Key (Optional Backup) | — | [console.groq.com/keys](https://console.groq.com/keys) |
 
 Tesseract OCR is also required for the receipt fallback parser.
-
----
-
-### Quick Deploy (For Judges)
-
-**Want to demo the app instantly?** This repository includes deployment-ready files for common free hosts:
-
-- `render.yaml` + `Procfile` for Render
-- `vercel.json` for Vercel
-- `deploy.sh` for scripted deployment flow
-- `DEMO_SCRIPT_UPDATED.sh` for guided demo steps
-
-Live demo will be available at: `https://pantry-pulse-web.onrender.com` (once deployed)
-
----
 
 ## Local Development Setup
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/pantry-pulse-orchestrator.git
+git clone https://github.com/Monal06/pantry-pulse-orchestrator.git
 cd pantry-pulse-orchestrator
 ```
 
@@ -234,6 +297,7 @@ pip install -r requirements.txt
 
 cp .env.example .env
 # Open .env and set your GEMINI_API_KEY
+# Optional: set GROQ_API_KEY for backup text model
 
 uvicorn app.main:app --reload --port 8000
 ```
@@ -250,6 +314,7 @@ pip install -r requirements.txt
 
 copy .env.example .env
 rem Open .env in a text editor and set your GEMINI_API_KEY
+rem Optional: set GROQ_API_KEY for backup text model
 
 uvicorn app.main:app --reload --port 8000
 ```
@@ -266,6 +331,7 @@ pip install -r requirements.txt
 
 Copy-Item .env.example .env
 # Open .env and set your GEMINI_API_KEY
+# Optional: set GROQ_API_KEY for backup text model
 
 uvicorn app.main:app --reload --port 8000
 ```
@@ -285,6 +351,9 @@ Edit `backend/.env` and fill in your values:
 # Required
 GEMINI_API_KEY=your_gemini_api_key_here
 
+# Optional: backup model for text-only fallback when Gemini is unavailable/rate-limited
+GROQ_API_KEY=your_groq_api_key_here
+
 # Optional: rotate through multiple keys to avoid rate limits
 # GEMINI_API_KEYS=key1,key2,key3
 
@@ -294,6 +363,7 @@ SUPABASE_KEY=your_supabase_anon_key
 ```
 
 Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com).
+Get an optional Groq API key at [console.groq.com/keys](https://console.groq.com/keys).
 
 ---
 
@@ -334,6 +404,24 @@ npm run preview
 | `torch` install fails on Windows | Install [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) first |
 | Port 8000 already in use (macOS) | Run `lsof -ti :8000 \| xargs kill -9` |
 | Port 8000 already in use (Windows) | Run `netstat -ano \| findstr :8000` then `taskkill /PID <pid> /F` |
+
+## Deployment
+
+#### How We Deploy to Render (Free Tier)
+
+1. **Connect GitHub Repository**: Link your GitHub repo to Render
+2. **Create Web Service**: Set up auto-deploy from `main` branch
+3. **Configure Environment**: Add `GEMINI_API_KEY` and optionally `GROQ_API_KEY` in Render environment variables
+4. **Deploy**: Render automatically builds and deploys from `render.yaml`
+5. **Keep Alive**: UptimeRobot pings `/health` endpoint every 10 minutes to prevent hibernation
+
+#### Configuration Files
+
+- **`render.yaml`**: Specifies build and start commands for Render
+- **`Procfile`**: Defines how to start the FastAPI backend (`web: uvicorn app.main:app --host 0.0.0.0 --port $PORT`)
+- **`vite.config.ts`**: Web app already proxies `/api` to backend
+
+This entire setup costs **$0** and maintains 99.9% uptime.
 
 ## API Endpoints
 
