@@ -26,7 +26,7 @@ FreshSave helps individuals and households reduce food waste through:
 |-----------|---------------------------|
 | **Innovation** | Multi-agent orchestration with 4-gate safety validation; dual-path freshness detection (Bayesian + Visual); RAG-powered food safety standards; non-food creative upcycling database; smart decision engine works at ANY freshness score |
 | **Societal Impact** | Reduces household food waste; connects donors with 15+ Galway charities; educates on environmental impact (2.5kg CO2 saved per item); democratizes waste management with free-tier architecture |
-| **Technical Depth** | FastAPI backend with async agents; React TypeScript frontend with expandable action cards; Gemini 2.5 Flash + Groq hybrid LLM routing; computer vision for spoilage detection; Bayesian freshness modeling; RAG retrieval for food safety standards |
+| **Technical Depth** | FastAPI backend with async agents; React TypeScript frontend with expandable action cards; Gemini 2.5 Flash + Groq hybrid LLM routing; computer vision for spoilage detection; USDA FoodKeeper + Bayesian freshness modeling; RAG retrieval for food safety standards |
 | **Ethical Compliance** | **100% free-tier architecture** (Render, Supabase free tier, Google AI Studio, Open Food Facts); transparent 3-gate safety validation prevents unsafe recommendations; explicit consent flows; no data exploitation; environmental benefit quantified and displayed |
 
 ---
@@ -37,6 +37,7 @@ FreshSave helps individuals and households reduce food waste through:
 - **Bayesian Model**: Predicts decay based on EFSA/FDA standards for 100+ food items across all storage types
 - **Visual Analysis**: AI detects mold, discoloration, wilting, and spoilage via photo analysis
 - **Age Verification**: Compares stored age against official safety limits
+- **USDA FoodKeeper Integration**: Uses item-level shelf-life data (661 products) before falling back to category decay rates
 
 ### Multi-Agent Orchestration
 Three specialized agents handle different exit paths:
@@ -162,6 +163,8 @@ pantry-pulse-orchestrator/
 │   ├── .env.production.example
 │   ├── app/
 │   │   ├── config.py
+│   │   ├── data/
+│   │   │   └── foodkeeper_data.json
 │   │   ├── main.py
 │   │   ├── models/
 │   │   │   ├── biometric.py
@@ -201,6 +204,7 @@ pantry-pulse-orchestrator/
 │   │   │   ├── cv_freshness_service.py
 │   │   │   ├── ensemble_freshness_service.py
 │   │   │   ├── gemini_service.py
+│   │   │   ├── foodkeeper_service.py
 │   │   │   ├── household_service.py
 │   │   │   ├── image_crop_service.py
 │   │   │   ├── inventory_service.py
@@ -216,6 +220,7 @@ pantry-pulse-orchestrator/
 │   └── tests/
 │       ├── test_all_food_types_complete.py
 │       ├── test_decision_engine_comprehensive.py
+│       ├── test_foodkeeper_integration.py
 │       ├── test_receipt_fallback.py
 │       ├── test_upcycle_steps_fix.py
 │       ├── test_upcycle_with_steps.py
@@ -431,16 +436,18 @@ For complete endpoint details, see router files in `backend/app/routers/` or ope
 
 ## Freshness Decay Model
 
-Each food category has a daily decay rate per storage location:
+Freshness uses USDA-backed defaults with item-level FoodKeeper overrides where available.
+
+Default category decay rates (points/day):
 
 | Category | Fridge | Freezer | Pantry | Counter |
 |----------|--------|---------|--------|---------|
-| Dairy | 5.0/day | 0.5/day | 15.0/day | 15.0/day |
-| Meat | 8.0/day | 0.3/day | 25.0/day | 25.0/day |
-| Seafood | 10.0/day | 0.3/day | 30.0/day | 30.0/day |
-| Fruit | 3.5/day | 0.5/day | 5.0/day | 6.0/day |
-| Vegetable | 3.0/day | 0.4/day | 5.0/day | 6.0/day |
-| Bread | 4.0/day | 0.3/day | 7.0/day | 7.0/day |
+| Dairy | 14.3/day | 1.1/day | 50.0/day | 50.0/day |
+| Meat | 25.0/day | 0.42/day | 100.0/day | 100.0/day |
+| Seafood | 50.0/day | 0.83/day | 100.0/day | 100.0/day |
+| Fruit | 7.1/day | 0.83/day | 10.0/day | 14.3/day |
+| Vegetable | 10.0/day | 0.83/day | 14.3/day | 20.0/day |
+| Bread | 7.1/day | 1.1/day | 14.3/day | 14.3/day |
 
 `freshness_score = 100 - (days_since_added * decay_rate)`
 
