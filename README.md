@@ -149,6 +149,12 @@ This approach ensures the live demo stays accessible for judges without incurrin
 
 ## Project Structure
 
+### Visual Project Structure
+
+![Pantry Pulse Orchestrator Diagram](diagrams/Pantry%20Pulse%20Orchestrator.png)
+
+### File Tree
+
 ```text
 pantry-pulse-orchestrator/
 ├── DEMO_SCRIPT_UPDATED.sh
