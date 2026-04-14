@@ -1,0 +1,67 @@
+@startuml Pantry Pulse Orchestrator
+
+skinparam linetype ortho
+skinparam BackgroundColor #ffffff
+
+package "CLIENT LAYER" {
+    component "Web App\n(React)" as Web
+}
+
+package "BACKEND API - FastAPI (Render Cloud)" {
+    component "/api/inventory" as inv
+    component "/api/analyze" as ana
+    component "/api/exit-strategy" as exit
+    component "/api/meals" as meals
+    component "/api/recipes" as recipes
+}
+
+package "SMART EXIT STRATEGY ENGINE" {
+    component "Freshness Calculator" as fresh
+    component "Safety Gate Validator" as safety
+    component "Ranking Engine" as rank
+}
+
+package "EXIT PATH AGENTS (Parallel)" {
+    component "SHARE AGENT\n(Safe Items)\nCharities/Banks" as share
+    component "UPCYCLE AGENT\n(Non-Food Only)\nCompost/Crafts" as upcycle
+    component "BIN AGENT\n(Last Resort)\nDisposal Guide" as bin
+}
+
+package "RAG RETRIEVER" {
+    component "Food Safety Data\n(EFSA/FDA)" as rag
+}
+
+cloud "Gemini API\n(Vision + Text)" as gemini
+cloud "Charities DB\n(Galway Local)" as chardb
+cloud "Food Safety Standards" as foodsafe
+
+Web --> inv
+Web --> ana
+Web --> exit
+Web --> meals
+Web --> recipes
+
+inv --> fresh
+ana --> gemini
+exit --> fresh
+
+fresh --> safety
+
+safety --> share
+safety --> upcycle
+safety --> bin
+safety --> rag
+safety --> rank
+
+share --> chardb
+share --> rag
+
+upcycle --> rag
+
+bin --> foodsafe
+bin --> rag
+
+rag --> gemini
+rag --> foodsafe
+
+@enduml
