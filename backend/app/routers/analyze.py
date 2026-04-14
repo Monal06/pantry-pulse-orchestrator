@@ -229,12 +229,8 @@ async def analyze_fridge_photo(
                 added_date=date.today(),
                 purchase_date=date.today(),
                 visual_hazard=is_hazardous,
-<<<<<<< HEAD
                 visual_verified=True,  # Items from photo analysis are visually verified
-                ai_freshness_score=ens_score
-=======
                 ai_freshness_score=ens_score,
->>>>>>> improveperformance
             )
             created = await inventory_service.add_item(user_id, item)
             items_created.append(created.model_dump(mode="json"))
