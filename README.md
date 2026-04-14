@@ -22,12 +22,12 @@ FreshSave helps individuals and households reduce food waste through:
 
 ### Judging Criteria Alignment
 
-| Criterion | How FreshSave Addresses It |
-|-----------|---------------------------|
-| **Innovation** | Multi-agent orchestration with 4-gate safety validation; dual-path freshness detection (Bayesian + Visual); RAG-powered food safety standards; non-food creative upcycling database; smart decision engine works at ANY freshness score |
-| **Societal Impact** | Reduces household food waste; connects donors with 15+ Galway charities; educates on environmental impact (2.5kg CO2 saved per item); democratizes waste management with free-tier architecture |
+| Criterion | How FreshSave Addresses It                                                                                                                                                                                                                                            |
+|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Innovation** | Multi-agent orchestration with 4-gate safety validation; dual-path freshness detection (Bayesian + Visual); RAG-powered food safety standards; non-food creative upcycling database; smart decision engine works at ANY freshness score                               |
+| **Societal Impact** | Reduces household food waste; connects donors with Galway charities (prototype for now); educates on environmental impact (2.5kg CO2 saved per item); democratizes waste management with free-tier architecture                                                       |
 | **Technical Depth** | FastAPI backend with async agents; React TypeScript frontend with expandable action cards; Gemini 2.5 Flash + Groq hybrid LLM routing; computer vision for spoilage detection; USDA FoodKeeper + Bayesian freshness modeling; RAG retrieval for food safety standards |
-| **Ethical Compliance** | **100% free-tier architecture** (Render, Supabase free tier, Google AI Studio, Open Food Facts); transparent 3-gate safety validation prevents unsafe recommendations; explicit consent flows; no data exploitation; environmental benefit quantified and displayed |
+| **Ethical Compliance** | **100% free-tier architecture** (Render, Supabase free tier, Google AI Studio, Open Food Facts); transparent 3-gate safety validation prevents unsafe recommendations; explicit consent flows; no data exploitation; environmental benefit quantified and displayed   |
 
 ---
 
@@ -36,8 +36,8 @@ FreshSave helps individuals and households reduce food waste through:
 ### Dual-Gate Freshness Detection
 - **Bayesian Model**: Predicts decay based on EFSA/FDA standards for 100+ food items across all storage types
 - **Visual Analysis**: AI detects mold, discoloration, wilting, and spoilage via photo analysis
-- **Age Verification**: Compares stored age against official safety limits
-- **USDA FoodKeeper Integration**: Uses item-level shelf-life data (661 products) before falling back to category decay rates
+- **Food Age Verification**: Compares stored age against official safety limits
+- **USDA FoodKeeper Integration**: Uses item-level shelf-life data (661 products) from [FSIS FoodKeeper Data](https://catalog.data.gov/dataset/fsis-foodkeeper-data) before falling back to category decay rates
 
 ### Multi-Agent Orchestration
 Three specialized agents handle different exit paths:
@@ -50,9 +50,8 @@ Three specialized agents handle different exit paths:
 - **4-gate safety validation** prevents dangerous recommendations:
   - Gate 1: Freshness Score (0-100 scale)
   - Gate 2: Visual Spoilage Detection (mold, etc.)
-  - Gate 3: Age Verification (vs. EFSA limits)
+  - Gate 3: Food Age Verification (vs. EFSA limits)
   - Gate 4: Category-specific rules
-- Ranks recommendations by user context (has garden? in office? environmental priority?)
 
 ## Features
 
@@ -450,7 +449,3 @@ Default category decay rates (points/day):
 | Bread | 7.1/day | 1.1/day | 14.3/day | 14.3/day |
 
 `freshness_score = 100 - (days_since_added * decay_rate)`
-
-## License
-
-MIT
