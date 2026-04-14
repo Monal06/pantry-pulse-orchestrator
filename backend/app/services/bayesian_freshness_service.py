@@ -59,6 +59,7 @@ def compute_bayesian_freshness(
     purchase_date: Optional[date] = None,
     visual_score: Optional[float] = None,
     visual_confidence: float = 0.0,
+    item_name: Optional[str] = None,
 ) -> dict:
     """
     Compute freshness with optional Bayesian visual update.
@@ -73,6 +74,7 @@ def compute_bayesian_freshness(
                                Pass None to use time-based prior only (legacy behaviour).
     visual_confidence: float — ensemble confidence 0-100
                                Only meaningful when visual_score is provided.
+    item_name        : str   — food item name for USDA FoodKeeper lookup (optional)
 
     Returns
     -------
@@ -84,12 +86,22 @@ def compute_bayesian_freshness(
         posterior_uncertainty: float   — 1-sigma uncertainty on posterior (always ≤ prior)
         decay_rate           : float   — λ used
         days_elapsed         : int
+        foodkeeper_match     : bool    — whether USDA FoodKeeper data was used
     """
     # --- Prior: identical to existing compute_freshness() ---
     age_ref = purchase_date if purchase_date else added_date
     days_elapsed = max(0, (date.today() - age_ref).days)
-    decay = get_decay_rate(category, storage)
+    decay = get_decay_rate(category, storage, item_name)
     prior_score = max(0.0, 100.0 - days_elapsed * decay)
+
+    # Check if FoodKeeper was used for this item
+    foodkeeper_used = False
+    if item_name:
+        try:
+            from app.services.foodkeeper_service import get_foodkeeper_decay_rate
+            foodkeeper_used = get_foodkeeper_decay_rate(item_name, storage) is not None
+        except Exception:
+            pass
 
     # Prior uncertainty grows with age (decays poorly → more uncertainty)
     # σ_prior = max(5, 0.15 * days * decay)  capped at 25
@@ -107,6 +119,7 @@ def compute_bayesian_freshness(
             "decay_rate": decay,
             "days_elapsed": days_elapsed,
             "update_applied": False,
+            "foodkeeper_match": foodkeeper_used,
         }
 
     # --- Likelihood: visual ensemble as noisy observation ---
@@ -139,6 +152,7 @@ def compute_bayesian_freshness(
         "decay_rate": decay,
         "days_elapsed": days_elapsed,
         "update_applied": True,
+        "foodkeeper_match": foodkeeper_used,
     }
 
 
@@ -147,6 +161,7 @@ def predict_days_remaining(
     category: str,
     storage: str,
     critical_threshold: float = 50.0,
+    item_name: Optional[str] = None,
 ) -> float:
     """
     Estimate days until freshness drops below critical_threshold.
@@ -154,7 +169,7 @@ def predict_days_remaining(
     Uses the current score and decay rate to extrapolate forward.
     Returns 0.0 if already below threshold.
     """
-    decay = get_decay_rate(category, storage)
+    decay = get_decay_rate(category, storage, item_name)
     if decay <= 0:
         return 9999.0  # non-perishable
     if current_score <= critical_threshold:
