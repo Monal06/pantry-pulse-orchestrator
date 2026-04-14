@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
 import itertools
+import time
 from typing import Any
 from datetime import datetime, timedelta
 
@@ -19,6 +21,11 @@ logger = logging.getLogger(__name__)
 _client: genai.Client | None = None
 _key_iterator: itertools.cycle | None = None
 _exhausted_keys: dict[str, datetime] = {}  # Track exhausted keys with timestamp
+
+# ── Simple response cache (avoids repeat API calls for same prompt) ──
+# Maps hash(prompt_text) → (response_text, timestamp)
+_response_cache: dict[str, tuple[str, float]] = {}
+_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 def _is_quota_error(exc: Exception) -> bool:
@@ -106,63 +113,96 @@ def _is_overload_error(exc: Exception) -> bool:
 
 
 async def _generate_with_retry(contents: list) -> str:
-    """Call Gemini with exponential-backoff retry and model fallback.
+    """Call Gemini with model fallback and key rotation.
 
-    For each model in the configured list, retry up to ``gemini_max_retries``
-    times with exponential backoff + jitter.  If every attempt on a model
-    returns a 503/429/overload error, fall back to the next model.
+    Strategy: try each model with available keys.
+    - On 503 (overload): skip to next model immediately (no point retrying).
+    - On 429 (quota): mark key exhausted. If ALL keys are now exhausted,
+      skip to next model immediately (same-project keys share quota).
+    - Succeeds fast when at least one model+key combo works.
     """
+    # ── Check cache first ───────────────────────────────────────────
+    cache_key = _make_cache_key(contents)
+    if cache_key:
+        cached = _response_cache.get(cache_key)
+        if cached and (time.time() - cached[1]) < _CACHE_TTL_SECONDS:
+            logger.info("[CACHE HIT] Returning cached Gemini response")
+            return cached[0]
+
     models = _get_models()
-    max_retries = get_settings().gemini_max_retries
+    all_keys = get_settings().get_all_gemini_keys()
     last_exc: Exception | None = None
-    current_key = None
 
     for model in models:
-        for attempt in range(1, max_retries + 1):
-            try:
-                # Get fresh client with rotated key for each attempt
-                client = _get_client()
-                current_key = _get_next_gemini_key()  # Track which key we're using
+        # Only try keys that aren't already marked exhausted
+        keys_to_try = [k for k in all_keys if k not in _exhausted_keys]
+        if not keys_to_try:
+            # All keys exhausted — try just ONE (might have reset)
+            keys_to_try = all_keys[:1]
 
+        for key in keys_to_try:
+            client = genai.Client(api_key=key)
+            try:
                 response = client.models.generate_content(
                     model=model,
                     contents=contents,
                 )
-                if attempt > 1 or model != models[0]:
-                    logger.info(
-                        "Gemini succeeded on model=%s attempt=%d", model, attempt,
-                    )
+                logger.info("Gemini succeeded: model=%s", model)
+
+                if cache_key:
+                    _response_cache[cache_key] = (response.text, time.time())
                 return response.text
+
             except Exception as exc:
                 last_exc = exc
 
-                # Check if this is a quota/daily limit error
                 if _is_quota_error(exc):
-                    logger.error(f"Gemini API key hit daily quota limit: {exc}")
-                    if current_key:
-                        _mark_key_exhausted(current_key)
-                    # Don't retry with this key - move to next model/key immediately
-                    break
+                    _mark_key_exhausted(key)
+                    # If ALL keys are now exhausted, don't bother trying
+                    # more keys on this model — they share the same project quota
+                    remaining = [k for k in all_keys if k not in _exhausted_keys]
+                    if not remaining:
+                        logger.warning(
+                            "All keys exhausted on %s, skipping to next model", model
+                        )
+                        break
+                    continue  # Try next key
 
-                if not _is_overload_error(exc):
-                    raise  # not transient — propagate immediately
+                if _is_overload_error(exc):
+                    logger.warning(
+                        "Gemini %s overloaded, skipping to next model", model
+                    )
+                    break  # Next model
 
-                delay = min(2 ** (attempt - 1), 16) + random.uniform(0, 1)
-                logger.warning(
-                    "Gemini %s overload (attempt %d/%d), retrying in %.1fs — %s",
-                    model, attempt, max_retries, delay, exc,
-                )
-                await asyncio.sleep(delay)
-
-        logger.warning(
-            "All %d retries exhausted for model=%s, trying next fallback.",
-            max_retries, model,
-        )
+                raise  # Non-transient error
 
     raise RuntimeError(
         "All Gemini models and API keys are currently unavailable. "
         "Please try again in a minute or add more API keys."
     ) from last_exc
+
+
+def _make_cache_key(contents: list) -> str | None:
+    """Create a hash key from the text parts of the prompt.
+    Returns None for any request that contains image/binary data
+    (every photo is unique — caching would return stale results)."""
+    try:
+        text_parts = []
+        for part in contents:
+            # If ANY part carries binary data (image), skip caching entirely
+            if hasattr(part, 'data') and part.data:
+                return None
+            if hasattr(part, 'inline_data') and part.inline_data:
+                return None
+            if hasattr(part, 'mime_type') and part.mime_type and 'image' in str(part.mime_type):
+                return None
+            if hasattr(part, 'text') and part.text:
+                text_parts.append(part.text)
+        if not text_parts:
+            return None
+        return hashlib.md5("||".join(text_parts).encode()).hexdigest()
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
