@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { getInventory, deleteItem, useItem, freezeItem } from "../api";
 import { freshnessColor, freshnessLabel } from "../theme";
+import { isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
 const ActionCard = ({ title, color, icon, onClick }: any) => (
   <Button
@@ -40,6 +41,7 @@ type FilterType = "all" | "good" | "use_soon" | "critical";
 
 export default function InventoryPage() {
   const navigate = useNavigate();
+  const demoSafeMode = isDemoSafeModeEnabled();
   const [items, setItems] = useState<any[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(false);
@@ -108,7 +110,7 @@ export default function InventoryPage() {
           <IconButton onClick={loadItems} sx={{ border: "1px solid #cbd5e1", borderRadius: "12px", width: 44, height: 44 }}>
             <Refresh />
           </IconButton>
-          <Button variant="contained" onClick={() => navigate("/add-items")} sx={{ bgcolor: "#111827", color: "white", borderRadius: "24px", px: 3, "&:hover": { bgcolor: "#000" } }}>
+          <Button variant="contained" onClick={() => navigate(demoSafeMode ? "/demo" : "/add-items")} sx={{ bgcolor: "#111827", color: "white", borderRadius: "24px", px: 3, "&:hover": { bgcolor: "#000" } }}>
             + Add Items
           </Button>
         </Stack>
@@ -170,10 +172,16 @@ export default function InventoryPage() {
           <Typography variant="h4" fontWeight={800} sx={{ mb: 6, letterSpacing: "-0.02em" }}>Your pantry is empty</Typography>
           
           <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
-            <ActionCard title="Image Upload" color="#d1fae5" icon={<CameraAlt/>} onClick={() => navigate("/add-items?mode=fridge")} />
-            <ActionCard title="Receipt Upload" color="#ccfbf1" icon={<Receipt/>} onClick={() => navigate("/add-items?mode=receipt")} />
-            <ActionCard title="Voice Record" color="#ffe4e6" icon={<Mic/>} onClick={() => navigate("/add-items?mode=voice")} />
-            <ActionCard title="Manual Entry" color="#f3e8ff" icon={<Edit/>} onClick={() => navigate("/add-items?mode=manual")} />
+            {demoSafeMode ? (
+              <ActionCard title="Manual Entry" color="#f3e8ff" icon={<Edit/>} onClick={() => navigate("/add-items?mode=manual")} />
+            ) : (
+              <>
+                <ActionCard title="Image Upload" color="#d1fae5" icon={<CameraAlt/>} onClick={() => navigate("/add-items?mode=fridge")} />
+                <ActionCard title="Receipt Upload" color="#ccfbf1" icon={<Receipt/>} onClick={() => navigate("/add-items?mode=receipt")} />
+                <ActionCard title="Voice Record" color="#ffe4e6" icon={<Mic/>} onClick={() => navigate("/add-items?mode=voice")} />
+                <ActionCard title="Manual Entry" color="#f3e8ff" icon={<Edit/>} onClick={() => navigate("/add-items?mode=manual")} />
+              </>
+            )}
           </Stack>
         </Box>
       )}

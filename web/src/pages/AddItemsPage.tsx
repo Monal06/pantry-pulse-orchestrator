@@ -16,6 +16,7 @@ import {
   addManualItem, analyzeVoiceInput, confirmReceiptItems,
 } from "../api";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
+import { isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
 const pulseRing = keyframes`
   0%   { transform: scale(1);   opacity: 0.6; }
@@ -87,10 +88,11 @@ const FUN_ANALYSIS_MESSAGES = [
 export default function AddItemsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const demoSafeMode = isDemoSafeModeEnabled();
   const modeMap: Record<string, number> = { photo: 0, fridge: 0, receipt: 1, voice: 2, manual: 3 };
   const modeParam = searchParams.get("mode");
   const isDirectMode = !!modeParam;
-  const [tab, setTab] = useState(modeMap[modeParam || "manual"] ?? 3);
+  const [tab, setTab] = useState(demoSafeMode ? 3 : (modeMap[modeParam || "manual"] ?? 3));
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [snackbar, setSnackbar] = useState("");
@@ -373,6 +375,14 @@ export default function AddItemsPage() {
   }, [cameraOpen, stream]);
 
   useEffect(() => {
+    if (demoSafeMode && tab !== 3) {
+      setTab(3);
+      setResult(null);
+      setImagePreview(null);
+    }
+  }, [demoSafeMode, tab]);
+
+  useEffect(() => {
     let interval: any;
     if (loading) {
       setLoadingIndex(Math.floor(Math.random() * FUN_ANALYSIS_MESSAGES.length));
@@ -394,7 +404,7 @@ export default function AddItemsPage() {
         )}
       </Box>
 
-      {!isDirectMode && (
+      {!isDirectMode && !demoSafeMode && (
         <Stack direction="row" spacing={1} sx={{ mb: 4, overflowX: "auto", pb: 1 }}>
           {TABS.map((t, i) => (
             <Chip
@@ -415,6 +425,12 @@ export default function AddItemsPage() {
             />
           ))}
         </Stack>
+      )}
+
+      {demoSafeMode && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Demo mode only supports Manual Entry on this page. AI-based photo, receipt, and voice input are disabled.
+        </Alert>
       )}
 
       {tab === 0 && (
@@ -1053,6 +1069,7 @@ export default function AddItemsPage() {
           </Button>
         </DialogContent>
       </Dialog>
+
     </Box>
   );
 }

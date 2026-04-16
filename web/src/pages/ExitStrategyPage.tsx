@@ -19,11 +19,12 @@ import { ContentCopy, Check } from "@mui/icons-material";
 import {
   getInventory,
   getSmartExitStrategies,
-  
 } from "../api";
 import { freshnessColor, freshnessLabel } from "../theme";
+import { buildDemoExitStrategies, isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
 export default function ExitStrategyPage() {
+  const demoSafeMode = isDemoSafeModeEnabled();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -97,29 +98,35 @@ export default function ExitStrategyPage() {
     // Cache miss - fetch from API
     setStrategiesLoading(true);
     try {
-      // Calculate verified age in days from purchase_date
-      const purchaseDate = new Date(item.purchase_date);
-      const today = new Date();
-      const verified_age_days = Math.ceil(
-        (today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      if (demoSafeMode) {
+        const localResult = buildDemoExitStrategies(item);
+        strategiesCache.current.set(item.id, localResult);
+        setExitStrategies(localResult);
+      } else {
+        // Calculate verified age in days from purchase_date
+        const purchaseDate = new Date(item.purchase_date);
+        const today = new Date();
+        const verified_age_days = Math.ceil(
+          (today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
 
-      // Use Smart Decision Engine - returns all options with safety gates
-      const result = await getSmartExitStrategies({
-        item_name: item.name,
-        category: item.category,
-        freshness_score: item.freshness_score,
-        quantity: item.quantity,
-        unit: item.unit,
-        visual_hazard: item.visual_hazard || false,  // True if mold/spoilage detected
-        visual_verified: item.visual_verified || false,  // True if analyzed from photo/receipt/barcode
-        verified_age_days: verified_age_days,
-      });
-      console.log("[EXIT-STRATEGY] Smart Decision Engine result:", result);
+        // Use Smart Decision Engine - returns all options with safety gates
+        const result = await getSmartExitStrategies({
+          item_name: item.name,
+          category: item.category,
+          freshness_score: item.freshness_score,
+          quantity: item.quantity,
+          unit: item.unit,
+          visual_hazard: item.visual_hazard || false,  // True if mold/spoilage detected
+          visual_verified: item.visual_verified || false,  // True if analyzed from photo/receipt/barcode
+          verified_age_days: verified_age_days,
+        });
+        console.log("[EXIT-STRATEGY] Smart Decision Engine result:", result);
 
-      // Store in cache for instant future loads
-      strategiesCache.current.set(item.id, result);
-      setExitStrategies(result);
+        // Store in cache for instant future loads
+        strategiesCache.current.set(item.id, result);
+        setExitStrategies(result);
+      }
     } catch (error) {
       console.error("Error fetching strategies:", error);
     } finally {
@@ -500,6 +507,7 @@ export default function ExitStrategyPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 }

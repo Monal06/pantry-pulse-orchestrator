@@ -4,9 +4,11 @@ import {
   Snackbar, Alert, Divider, Stack,
 } from "@mui/material";
 import { CalendarMonth } from "@mui/icons-material";
-import { getWeeklyMealPlan } from "../api";
+import { getInventory, getWeeklyMealPlan } from "../api";
+import { buildDemoWeeklyPlan, isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
-export default function WeeklyPlanPage() {
+export default function WeeklyPlanPage({ forceDemoSafeMode = false }: { forceDemoSafeMode?: boolean }) {
+  const demoSafeMode = forceDemoSafeMode || isDemoSafeModeEnabled();
   const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState("");
@@ -14,8 +16,13 @@ export default function WeeklyPlanPage() {
   const loadPlan = async () => {
     setLoading(true);
     try {
-      const data = await getWeeklyMealPlan();
-      setPlan(data);
+      if (demoSafeMode) {
+        const inventory = await getInventory();
+        setPlan(buildDemoWeeklyPlan(inventory));
+      } else {
+        const data = await getWeeklyMealPlan();
+        setPlan(data);
+      }
     } catch (e: any) {
       setSnackbar(e.message);
     } finally {
@@ -119,6 +126,7 @@ export default function WeeklyPlanPage() {
       <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar("")}>
         <Alert severity="info" onClose={() => setSnackbar("")}>{snackbar}</Alert>
       </Snackbar>
+
     </Box>
   );
 }

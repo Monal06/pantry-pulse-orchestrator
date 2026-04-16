@@ -3,7 +3,8 @@ import {
   Box, Typography, Card, CardContent, Button, Chip, CircularProgress,
   Snackbar, Alert, LinearProgress, Stack,
 } from "@mui/material";
-import { getNutritionalBalance } from "../api";
+import { getInventory, getNutritionalBalance } from "../api";
+import { buildDemoNutrition, isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
 const STATUS_COLORS: Record<string, string> = {
   good: "#4CAF50",
@@ -35,6 +36,7 @@ function scoreColor(score: number): string {
 }
 
 export default function NutritionPage() {
+  const demoSafeMode = isDemoSafeModeEnabled();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState(QUIRKY_TEXTS[0]);
@@ -44,8 +46,13 @@ export default function NutritionPage() {
     setLoading(true);
     setLoadingText(QUIRKY_TEXTS[Math.floor(Math.random() * QUIRKY_TEXTS.length)]);
     try {
-      const result = await getNutritionalBalance();
-      setData(result);
+      if (demoSafeMode) {
+        const inventory = await getInventory();
+        setData(buildDemoNutrition(inventory));
+      } else {
+        const result = await getNutritionalBalance();
+        setData(result);
+      }
     } catch (e: any) {
       setSnackbar(e.message);
     } finally {
@@ -159,6 +166,7 @@ export default function NutritionPage() {
       <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar("")}>
         <Alert severity="info" onClose={() => setSnackbar("")}>{snackbar}</Alert>
       </Snackbar>
+
     </Box>
   );
 }

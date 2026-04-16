@@ -1,7 +1,32 @@
+import { isPresentationLockEnabled, setDemoSafeModeEnabled } from "./utils/demoSafeMode";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 const USER_ID = "demo-user";
 
+const AI_BLOCKED_PATH_PREFIXES = [
+  "/analyze/fridge-photo",
+  "/analyze/receipt",
+  "/analyze/barcode",
+  "/analyze/voice",
+  "/analyze/spoilage-check",
+  "/analyze/nutritional-balance",
+  "/recipes/metabolic/plan",
+  "/meals/suggestions",
+  "/meals/weekly-plan",
+  "/orchestrate/",
+];
+
+function isAiPath(path: string): boolean {
+  return AI_BLOCKED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 async function request(path: string, options: RequestInit = {}) {
+  if (isPresentationLockEnabled() && isAiPath(path)) {
+    // Keep session in demo-safe mode if the lock is active.
+    setDemoSafeModeEnabled(true);
+    throw new Error("Presentation demo mode is locked. AI features are disabled for this QR session.");
+  }
+
   const separator = path.includes("?") ? "&" : "?";
   const url = `${API_BASE_URL}${path}${separator}user_id=${USER_ID}`;
   const res = await fetch(url, options);
@@ -103,11 +128,10 @@ export async function recordCookedMeal(
   mealName: string,
   ingredients: string[]
 ) {
-  const params = ingredients
-    .map((i) => `ingredients_used=${encodeURIComponent(i)}`)
-    .join("&");
+  const query = new URLSearchParams({ meal_name: mealName });
+  ingredients.forEach((ingredient) => query.append("ingredients_used", ingredient));
   return request(
-    `/meals/cooked?meal_name=${encodeURIComponent(mealName)}&${params}`,
+    `/meals/cooked?${query.toString()}`,
     { method: "POST" }
   );
 }
@@ -217,6 +241,13 @@ export async function createCommunityListing(data: {
 
 export async function claimListing(listingId: string) {
   return request(`/community/listings/${listingId}/claim`, { method: "POST" });
+}
+
+/** Remove every item from the current user's pantry. Returns the count removed. */
+export async function clearAllItems(): Promise<number> {
+  const items = await getInventory();
+  await Promise.all(items.map((item: any) => deleteItem(item.id)));
+  return items.length;
 }
 
 export async function getHousehold() {

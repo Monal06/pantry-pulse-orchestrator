@@ -352,17 +352,24 @@ async def suggest_meals(
     dietary_prompt: str = "No dietary restrictions.",
     household_size: int = 1,
 ) -> list[dict]:
-    safe_inventory = [i for i in inventory_items if not i.get("visual_hazard", False) and i.get("freshness_score", 100) > 0]
+    # Meals should only include safe and reasonably fresh items.
+    safe_inventory = [
+        i for i in inventory_items
+        if not i.get("visual_hazard", False) and i.get("freshness_score", 100) >= 40
+    ]
+    very_critical_items = [
+        i for i in inventory_items
+        if not i.get("visual_hazard", False) and 0 < i.get("freshness_score", 100) < 40
+    ]
     spoiled_items = [i for i in inventory_items if i.get("visual_hazard", False) or i.get("freshness_score", 100) <= 0]
     
     good_items = [i for i in safe_inventory if i.get("freshness_score", 100) >= 70]
     use_soon_items = [i for i in safe_inventory if 40 <= i.get("freshness_score", 100) < 70]
-    critical_items = [i for i in safe_inventory if i.get("freshness_score", 100) < 40]
 
     inventory_summary = ""
-    if critical_items:
-        inventory_summary += "CRITICAL - Use extremely soon:\n"
-        for item in critical_items:
+    if very_critical_items:
+        inventory_summary += "\nVERY CRITICAL - DO NOT USE IN MEAL SUGGESTIONS:\n"
+        for item in very_critical_items:
             inventory_summary += f"  - {item['name']} (freshness: {item['freshness_score']}%, {item['quantity']} {item['unit']})\n"
     if use_soon_items:
         inventory_summary += "\nUSE SOON - Should use in next few meals:\n"
@@ -388,7 +395,7 @@ DIETARY REQUIREMENTS (MUST follow strictly - never suggest meals that violate th
 
 RULES:
 1. PRIORITIZE items marked USE SOON - incorporate these where possible.
-2. Items marked CRITICAL should be used carefully; suggest alternative uses to prevent waste (e.g. overripe bananas -> banana bread).
+2. NEVER include items marked VERY CRITICAL in meal ingredients. Treat them as non-meal handling only.
 3. SAFETY: NEVER suggest meals using items from the UNSAFE/DISCARD list.
 4. If a meal requires an ingredient NOT in the inventory, list it clearly in the ingredients.
 5. Meals should be practical and achievable for a home cook.

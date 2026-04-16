@@ -7,6 +7,7 @@ import { Restaurant, CalendarMonth, Favorite, FavoriteBorder, AutoAwesome, Monit
 import { useNavigate } from "react-router-dom";
 import { getMealSuggestions, recordCookedMeal, saveRecipe, generateMetabolicPlan, getInventory } from "../api";
 import WeeklyPlanPage from "./WeeklyPlanPage";
+import { buildDemoMealSuggestions, isDemoSafeModeEnabled } from "../utils/demoSafeMode";
 
 class MealsStore {
   meals: any[] = [];
@@ -125,6 +126,7 @@ const FUN_LOADING_MESSAGES = [
 
 export default function MealsPage() {
   const navigate = useNavigate();
+  const demoSafeMode = isDemoSafeModeEnabled();
   const [meals, setMeals] = useState<any[]>(mealsStore.meals);
   const [loading, setLoading] = useState(mealsStore.loading);
   const [snackbar, setSnackbar] = useState("");
@@ -154,7 +156,29 @@ export default function MealsPage() {
   }, [loading]);
 
   const loadSuggestions = async () => {
-    // Optionally randomize starting index
+    if (demoSafeMode) {
+      setLoading(true);
+      setLoadingIndex(Math.floor(Math.random() * FUN_LOADING_MESSAGES.length));
+      try {
+        const inventory = await getInventory();
+        const generated = buildDemoMealSuggestions(inventory);
+        setMeals(generated);
+        setSummary({
+          total_items: inventory.length,
+          critical_items: inventory.filter((i: any) => i.freshness_status === "critical").length,
+          use_soon_items: inventory.filter((i: any) => i.freshness_status === "use_soon").length,
+        });
+        setTips([
+          { item: "Demo safe mode", tip: "Suggestions generated locally from pantry data without AI calls." },
+        ]);
+      } catch (e: any) {
+        setSnackbar(e.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoadingIndex(Math.floor(Math.random() * FUN_LOADING_MESSAGES.length));
     mealsStore.generate();
   };
@@ -189,7 +213,9 @@ export default function MealsPage() {
   return (
     <Box>
       <Box sx={{ mb: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Meals & Planning</Typography>
+        <Box>
+          <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.02em" }}>Meals & Planning</Typography>
+        </Box>
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" startIcon={<Favorite />} onClick={() => navigate("/recipes")} sx={{ borderColor: "#cbd5e1", color: "#475569" }}>
             Saved
@@ -334,12 +360,13 @@ export default function MealsPage() {
       )}
 
       {activeTab === 1 && (
-        <WeeklyPlanPage />
+        <WeeklyPlanPage forceDemoSafeMode={demoSafeMode} />
       )}
 
       <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar("")}>
         <Alert severity="info" onClose={() => setSnackbar("")}>{snackbar}</Alert>
       </Snackbar>
+
     </Box>
   );
 }

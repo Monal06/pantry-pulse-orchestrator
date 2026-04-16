@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Max retries *per model* before falling back to the next model
     gemini_max_retries: int = 1
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     def get_all_gemini_keys(self) -> list[str]:
         """Get all Gemini API keys for rotation."""

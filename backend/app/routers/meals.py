@@ -37,8 +37,49 @@ async def get_meal_suggestions(
     if "error" in result:
         raise HTTPException(status_code=502, detail=result["error"])
 
+    very_critical_names = {
+        i.name.strip().lower()
+        for i in items
+        if i.visual_hazard or i.freshness_score < 40
+    }
+
+    sanitized_meals = []
+    for meal in result.get("meals", []):
+        ingredients = meal.get("ingredients_used", [])
+        filtered_ingredients = [
+            ing for ing in ingredients
+            if not any(
+                crit_name in ing.strip().lower() or ing.strip().lower() in crit_name
+                for crit_name in very_critical_names
+            )
+        ]
+
+        if ingredients and not filtered_ingredients:
+            continue
+
+        meal_copy = dict(meal)
+        meal_copy["ingredients_used"] = filtered_ingredients
+        sanitized_meals.append(meal_copy)
+
+    if not sanitized_meals:
+        safe_names = [i.name for i in items if not i.visual_hazard and i.freshness_score >= 40][:4]
+        fallback_ingredients = safe_names if safe_names else ["rice", "eggs", "frozen vegetables"]
+        sanitized_meals = [
+            {
+                "name": "Quick Safe Pantry Plate",
+                "description": "Simple meal plan generated from safe pantry ingredients.",
+                "ingredients_used": fallback_ingredients,
+                "instructions": [
+                    "Prep the listed safe ingredients.",
+                    "Cook thoroughly and serve immediately.",
+                ],
+                "freshness_priority": "use_soon",
+                "prep_time_minutes": 15,
+            }
+        ]
+
     return {
-        "meals": result.get("meals", []),
+        "meals": sanitized_meals,
         "waste_prevention_tips": result.get("waste_prevention_tips", []),
         "inventory_summary": {
             "total_items": len(items),
@@ -51,7 +92,7 @@ async def get_meal_suggestions(
 @router.post("/cooked")
 async def record_cooked_meal(
     meal_name: str = Query(...),
-    ingredients_used: list[str] = Query(...),
+    ingredients_used: list[str] = Query(default=[]),
     user_id: str = Query(default=DEFAULT_USER),
 ):
     """Record a cooked meal: auto-deducts matching items from inventory and logs waste-saved events."""

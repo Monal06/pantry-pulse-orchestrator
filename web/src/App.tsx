@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
-  AppBar, Toolbar, Typography, IconButton, useMediaQuery, Divider,
+  AppBar, Toolbar, Typography, IconButton, useMediaQuery, Divider, Chip,
 } from "@mui/material";
 import {
   Kitchen, Restaurant, BarChart, FoodBank, Favorite, Settings, Menu as MenuIcon,
@@ -19,6 +20,8 @@ import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import NutritionPage from "./pages/NutritionPage";
+import DemoPage from "./pages/DemoPage";
+import { isDemoSafeModeEnabled, isPresentationLockEnabled, setDemoSafeModeEnabled, setPresentationLockEnabled } from "./utils/demoSafeMode";
 
 const DRAWER_WIDTH = 240;
 
@@ -33,10 +36,42 @@ const NAV_ITEMS = [
   { path: "/profile", label: "Diet Profile", icon: <Settings /> },
 ] as const;
 
+const DEMO_BANNER_PATHS = new Set([
+  "/",
+  "/exit-strategy",
+  "/meals",
+  "/dashboard",
+  "/recipes",
+  "/nutrition",
+  "/profile",
+]);
+
 function AppLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const presentationLocked = isPresentationLockEnabled();
+  const demoSafeMode = isDemoSafeModeEnabled();
+  const showDemoBanner = demoSafeMode && DEMO_BANNER_PATHS.has(location.pathname);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const lockRequested = params.get("demo") === "1" || params.get("lock") === "1";
+    if (lockRequested) {
+      setPresentationLockEnabled(true);
+      setDemoSafeModeEnabled(true);
+      if (location.pathname !== "/demo") {
+        navigate("/demo", { replace: true });
+      }
+      return;
+    }
+
+    if (isPresentationLockEnabled()) {
+      // Persist AI-free behavior for the entire locked presentation session.
+      setDemoSafeModeEnabled(true);
+    }
+  }, [location.pathname, location.search, navigate]);
 
   const drawerContent = (
     <Box>
@@ -59,15 +94,18 @@ function AppLayout() {
               onClick={() => isMobile && setMobileOpen(false)}
               sx={{
                 borderRadius: "16px", mb: 0.5, mx: 1,
-                bgcolor: isActive ? "#bbf7d0" : "transparent",
-                color: isActive ? "#065f46" : "#475569",
-                "&:hover": { bgcolor: isActive ? "#bbf7d0" : "rgba(0,0,0,0.04)" },
+                  bgcolor: isActive ? "#bbf7d0" : "transparent",
+                  color: isActive ? "#065f46" : "#475569",
+                  border: "1px solid transparent",
+                "&:hover": {
+                    bgcolor: isActive ? "#bbf7d0" : "rgba(0,0,0,0.04)",
+                },
               }}
             >
               <ListItemIcon sx={{ minWidth: 40, color: "inherit" }}>
                 {item.icon}
               </ListItemIcon>
-              <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: isActive ? 700 : 500, fontSize: "0.95rem" }} />
+                <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: isActive ? 700 : 500, fontSize: "0.95rem" }} />
             </ListItemButton>
           );
         })}
@@ -134,7 +172,18 @@ function AppLayout() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/recipes" element={<RecipesPage />} />
             <Route path="/nutrition" element={<NutritionPage />} />
+            <Route path="/demo" element={<DemoPage />} />
           </Routes>
+
+          {showDemoBanner && (
+            <Box sx={{ mt: 3, display: "flex", justifyContent: "center" }}>
+              <Chip
+                size="small"
+                label="Demo safe mode: local strategy engine"
+                sx={{ bgcolor: "#dcfce7", color: "#166534", fontWeight: 700 }}
+              />
+            </Box>
+          )}
         </Box>
       </Box>
     </Box>
