@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     cors_origins: str = "*"  # Comma-separated URLs in production
 
     # Comma-separated model names tried in order on 503 / overload errors
-    gemini_models: str = "gemini-2.5-flash,gemini-2.0-flash,gemini-flash-latest"
+
+    gemini_models: str = "gemini-2.0-flash,gemini-2.5-flash,gemini-flash-latest"
     # Max retries *per model* before falling back to the next model
     gemini_max_retries: int = 1
 
