@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreshSave — Presentation (App UI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* Exact FreshSave theme colours from theme.ts */
+    --primary: #16a34a;
+    --primary-light: #dcfce7;
+    --primary-dark: #15803d;
+    --secondary: #f97316;
+    --secondary-light: #ffedd5;
+    --error: #ef4444;
+    --error-light: #fee2e2;
+    --bg: #fcfcfc;
+    --paper: #ffffff;
+    --text-primary: #27272a;
+    --text-secondary: #52525b;
+    --border: #e4e4e7;
+    --sidebar-bg: rgba(255, 255, 255, 0.4);
+    --chip-radius: 12px;
+    --card-radius: 24px;
+    --btn-radius: 24px;
+
+    /* Freshness colours */
+    --fresh: #22c55e;
+    --use-soon: #f59e0b;
+    --critical: #ef4444;
+
+    /* Pastel tints */
+    --tint-green: #d1fae5;
+    --tint-teal: #ccfbf1;
+    --tint-pink: #ffe4e6;
+    --tint-purple: #f3e8ff;
+    --tint-yellow: #FFF8E1;
+    --tint-blue: #E3F2FD;
+    --tint-green-deep: #E8F5E9;
+    --tint-red: #FFEBEE;
+    --tint-lime: #F1F8E9;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ==========================================================
+     HOOK SLIDE — Full-screen black cinematic opener
+     Displayed OUTSIDE the app shell, overlaying everything
+  ========================================================== */
+  .hook-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: opacity 0.6s ease, visibility 0.6s ease;
+  }
+
+  .hook-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Floating food emojis */
+  .floating-food {
+    position: absolute;
+    font-size: 2.2rem;
+    animation: floatFood 6s ease-in-out infinite;
+    opacity: 0.35;
+    pointer-events: none;
+    user-select: none;
+  }
+  @keyframes floatFood {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-18px) rotate(5deg); }
+    50% { transform: translateY(-10px) rotate(-3deg); }
+    75% { transform: translateY(-22px) rotate(4deg); }
+  }
+
+  .hook-fridge {
+    font-size: 6rem;
+    margin-bottom: 24px;
+    animation: fridgePulse 3s ease-in-out infinite;
+    position: relative;
+  }
+
+  /* Glowing ring behind the fridge icon */
+  .hook-fridge::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(22,163,74,0.15) 0%, transparent 70%);
+    animation: ringPulse 3s ease-in-out infinite;
+  }
+  @keyframes ringPulse {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.15); opacity: 1; }
+  }
+  @keyframes fridgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  .hook-question {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+    max-width: 720px;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  .hook-subtext {
+    font-size: 1.05rem;
+    color: rgba(255,255,255,0.45);
+    max-width: 560px;
+    line-height: 1.6;
+    margin-bottom: 48px;
+  }
+
+  .hook-hint {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  /* ==========================================================
+     APP SHELL — Replicates App.tsx layout
+  ========================================================== */
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+    padding: 16px;
+    gap: 16px;
+    background:
+      radial-gradient(at 0% 0%, #fef3c7 0px, transparent 50%),
+      radial-gradient(at 100% 0%, #d1fae5 0px, transparent 50%),
+      radial-gradient(at 100% 100%, #cffafe 0px, transparent 50%),
+      radial-gradient(at 0% 100%, #fee2e2 0px, transparent 50%),
+      #f8fafc;
+  }
+
+  /* ==========================================================
+     SIDEBAR — Replicates Drawer from App.tsx
+  ========================================================== */
+  .sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--card-radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+  }
+
+  .sidebar-header {
+    padding: 18px 16px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-logo-svg {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header .logo-text {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: -0.01em;
+  }
+
+  .sidebar-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 8px;
+  }
+
+  .sidebar-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #94a3b8;
+    padding: 14px 20px 4px;
+  }
+
+  .sidebar-nav {
+    padding: 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 14px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #475569;
+    cursor: default;
+    transition: all 0.25s;
+    white-space: nowrap;
+  }
+
+  .nav-item .nav-emoji {
+    font-size: 1.05rem;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .nav-item.active {
+    background: #bbf7d0;
+    color: #065f46;
+    font-weight: 700;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background: var(--border);
+    opacity: 0.5;
+    margin: 6px 12px;
+  }
+
+  /* Default nav items */
+  .nav-item[data-nav] { background: transparent; color: #475569; font-weight: 500; }
+
+  /* Active nav highlight by slide data-nav */
+  .sidebar[data-active-nav="hook"] .nav-item[data-nav="hook"],
+  .sidebar[data-active-nav="problem"] .nav-item[data-nav="problem"],
+  .sidebar[data-active-nav="solution"] .nav-item[data-nav="solution"],
+  .sidebar[data-active-nav="demo"] .nav-item[data-nav="demo"],
+  .sidebar[data-active-nav="future"] .nav-item[data-nav="future"],
+  .sidebar[data-active-nav="impact"] .nav-item[data-nav="impact"],
+  .sidebar[data-active-nav="team"] .nav-item[data-nav="team"] {
+    background: #bbf7d0 !important;
+    color: #065f46 !important;
+    font-weight: 700 !important;
+  }
+
+  /* ==========================================================
+     MAIN CONTENT — Replicates main area
+  ========================================================== */
+  .main-content {
+    flex: 1;
+    background: var(--paper);
+    border-radius: var(--card-radius);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page-area {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .page-area.active { display: block; }
+
+  /* Slide 3 (How It Works) needs flex to stretch the diagram */
+  #slide-3.active { display: flex !important; }
+
+  /* ==========================================================
+     MUI-STYLE COMPONENTS
+  ========================================================== */
+
+  .mui-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .mui-card-content { padding: 20px 24px; }
+
+  .card-lime { background: var(--tint-lime); border-color: #c5e1a5; }
+  .card-yellow { background: var(--tint-yellow); border-color: #fff0b3; }
+  .card-red { background: var(--tint-red); border-color: #ffcdd2; }
+  .card-blue { background: var(--tint-blue); border-color: #bbdefb; }
+  .card-green { background: var(--tint-green-deep); border-color: #a5d6a7; }
+  .card-purple { background: var(--tint-purple); border-color: #e1bee7; }
+
+  .item-card {
+    border-left: 4px solid var(--fresh);
+    transition: all 0.2s;
+  }
+  .item-card.use-soon { border-left-color: var(--use-soon); }
+  .item-card.critical { border-left-color: var(--critical); }
+
+  .mui-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: var(--chip-radius);
+    font-size: 0.8rem;
+    font-weight: 500;
+    gap: 4px;
+  }
+
+  .chip-fresh { background: rgba(34,197,94,0.12); color: var(--fresh); }
+  .chip-use-soon { background: rgba(245,158,11,0.12); color: var(--use-soon); }
+  .chip-critical { background: rgba(239,68,68,0.12); color: var(--critical); }
+  .chip-outlined {
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: var(--text-secondary);
+  }
+
+  .mui-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 24px;
+    border-radius: var(--btn-radius);
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    cursor: default;
+    text-transform: none;
+  }
+
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-dark { background: #111827; color: white; }
+  .btn-outlined { background: transparent; border: 1px solid #cbd5e1; color: var(--text-primary); }
+
+  .progress-track {
+    height: 6px;
+    border-radius: 3px;
+    background: #eee;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  .progress-fill.fresh { background: var(--fresh); }
+  .progress-fill.use-soon { background: var(--use-soon); }
+  .progress-fill.critical { background: var(--critical); }
+
+  .page-title {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .page-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+
+  .text-secondary {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .font-bold { font-weight: 700; }
+  .font-extrabold { font-weight: 800; }
+
+  /* ==========================================================
+     ACTION CARDS — From InventoryPage
+  ========================================================== */
+  .action-cards {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .action-card {
+    width: 160px;
+    height: 160px;
+    border-radius: var(--card-radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+    border: none;
+    cursor: default;
+  }
+
+  .action-card .material-icons-round { font-size: 40px; color: #0f172a; }
+  .action-card .ac-title { font-weight: 700; font-size: 0.95rem; color: #0f172a; }
+  .action-card .ac-sub { font-size: 0.75rem; color: var(--text-secondary); }
+
+  /* ==========================================================
+     GRID LAYOUTS
+  ========================================================== */
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .flex-row { display: flex; align-items: center; gap: 8px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .flex-col { display: flex; flex-direction: column; }
+  .gap-sm { gap: 4px; }
+  .gap-md { gap: 12px; }
+  .gap-lg { gap: 24px; }
+  .mb-sm { margin-bottom: 8px; }
+  .mb-md { margin-bottom: 16px; }
+  .mb-lg { margin-bottom: 24px; }
+  .mt-md { margin-top: 16px; }
+  .mt-lg { margin-top: 24px; }
+
+  /* ==========================================================
+     EXIT STRATEGY CARDS — from ExitStrategyPage
+  ========================================================== */
+  .exit-path-card {
+    border: 1px solid;
+    border-radius: var(--card-radius);
+    padding: 24px 20px;
+    text-align: center;
+    flex: 1;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+  }
+
+  .exit-path-card.upcycle { background: var(--tint-green-deep); border-color: #a5d6a7; }
+  .exit-path-card.share { background: var(--tint-purple); border-color: #ce93d8; }
+  .exit-path-card.bin { background: var(--tint-red); border-color: #ef9a9a; }
+
+  .exit-path-card .ep-icon { font-size: 40px; margin-bottom: 12px; }
+  .exit-path-card .ep-title { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; }
+  .exit-path-card .ep-desc { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6; }
+
+  /* ==========================================================
+     STAT BLOCKS — from DashboardPage
+  ========================================================== */
+  .stat-paper {
+    flex: 1;
+    padding: 16px;
+    text-align: center;
+    border-radius: 8px;
+  }
+
+  .stat-paper .sp-value {
+    font-size: 2.125rem;
+    font-weight: 800;
+  }
+
+  .stat-paper .sp-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  /* ==========================================================
+     GATES — Safety architecture display
+  ========================================================== */
+  .gate-card {
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px;
+    text-align: center;
+  }
+
+  .gate-card .gate-icon { font-size: 36px; margin-bottom: 8px; }
+  .gate-card .gate-title { font-size: 0.875rem; font-weight: 700; color: var(--error); margin-bottom: 6px; }
+  .gate-card .gate-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
+
+  /* ==========================================================
+     TECH TABLE — styled like MUI table
+  ========================================================== */
+  .tech-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 4px;
+    font-size: 0.85rem;
+  }
+
+  .tech-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    font-weight: 600;
+  }
+
+  .tech-table td {
+    padding: 10px 12px;
+    background: #fafafa;
+    border: none;
+  }
+
+  .tech-table tr td:first-child { border-radius: 8px 0 0 8px; font-weight: 600; }
+  .tech-table tr td:last-child { border-radius: 0 8px 8px 0; }
+
+  .tech-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .tc-green { background: var(--primary-light); color: var(--primary); }
+  .tc-blue { background: var(--tint-blue); color: #1565C0; }
+  .tc-purple { background: var(--tint-purple); color: #7c3aed; }
+
+  /* ==========================================================
+     PIPELINE STEPS — styled like action cards
+  ========================================================== */
+  .pipeline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .pipeline-step {
+    flex: 1;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px 16px;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+  }
+
+  .pipeline-step .ps-icon { font-size: 36px; margin-bottom: 8px; }
+  .pipeline-step .ps-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+  .pipeline-step .ps-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+
+  .pipeline-arrow {
+    font-size: 20px;
+    color: #cbd5e1;
+    flex-shrink: 0;
+  }
+
+  /* ==========================================================
+     ETHICS ITEMS
+  ========================================================== */
+  .ethics-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+  }
+
+  .ethics-card .ec-icon { font-size: 22px; margin-bottom: 6px; }
+  .ethics-card .ec-title { font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; }
+  .ethics-card .ec-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+
+  /* ==========================================================
+     ENSEMBLE WEIGHT BADGES
+  ========================================================== */
+  .weight-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+
+  .wb-green { background: var(--primary-light); color: var(--primary-dark); }
+  .wb-blue { background: var(--tint-blue); color: #1565C0; }
+  .wb-purple { background: var(--tint-purple); color: #7c3aed; }
+  .wb-amber { background: var(--secondary-light); color: #c2410c; }
+
+  /* ==========================================================
+     TWO COLUMN LAYOUT
+  ========================================================== */
+  .two-col { display: flex; gap: 32px; }
+  .col { flex: 1; }
+
+  /* ==========================================================
+     DEMO TRANSITION — centered card
+  ========================================================== */
+  .demo-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+  }
+
+  .demo-pulse-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 28px;
+    border-radius: var(--btn-radius);
+    background: var(--primary);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    animation: chipPulse 2s ease-in-out infinite;
+    margin-bottom: 24px;
+  }
+
+  @keyframes chipPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(22,163,74,0.4); }
+    50% { opacity: 0.9; box-shadow: 0 0 0 12px rgba(22,163,74,0); }
+  }
+
+  /* ==========================================================
+     CLOSING SLIDE
+  ========================================================== */
+  .closing-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+  }
+
+  .closing-stats-row {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    margin: 32px 0;
+  }
+
+  .closing-stat { text-align: center; }
+
+  .closing-stat .cs-num {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--primary);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .closing-stat .cs-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 6px;
+  }
+
+  /* ==========================================================
+     SLIDE NAVIGATION
+  ========================================================== */
+  .slide-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: var(--primary);
+    transition: width 0.4s ease;
+    z-index: 1000;
+  }
+
+  .slide-info {
+    position: fixed;
+    bottom: 12px;
+    right: 20px;
+    font-size: 0.7rem;
+    color: #cbd5e1;
+    z-index: 1000;
+  }
+
+  .slide-nav-hint {
+    position: fixed;
+    bottom: 12px;
+    left: 20px;
+    font-size: 0.7rem;
+    color: #cbd5e1;
+    z-index: 1000;
+  }
+
+  /* ==========================================================
+     ALERT BANNER
+  ========================================================== */
+  .alert-banner {
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .alert-error { background: var(--tint-red); color: #c62828; }
+  .alert-warning { background: var(--tint-yellow); color: #e65100; }
+  .alert-info { background: var(--tint-blue); color: #1565C0; }
+  .alert-success { background: var(--tint-green-deep); color: #2e7d32; }
+
+  /* Freshness scoring display */
+  .freshness-display { text-align: right; }
+
+  .freshness-score { font-weight: 800; font-size: 1.2rem; }
+
+  .fs-fresh { color: var(--fresh); }
+  .fs-soon { color: var(--use-soon); }
+  .fs-critical { color: var(--critical); }
+</style>
+</head>
+<body>
+
+<!-- ==========================================================
+     HOOK OVERLAY — Slide 0: Full-screen black cinematic opener
+========================================================== -->
+<div class="hook-overlay" id="hookOverlay">
+  <!-- Floating food emojis scattered around -->
+  <span class="floating-food" style="top: 8%; left: 6%; animation-delay: 0s; font-size: 2.4rem;">🥦</span>
+  <span class="floating-food" style="top: 15%; right: 10%; animation-delay: 1.2s; font-size: 1.8rem;">🍎</span>
+  <span class="floating-food" style="top: 70%; left: 8%; animation-delay: 0.6s; font-size: 2rem;">🧀</span>
+  <span class="floating-food" style="top: 80%; right: 12%; animation-delay: 2s; font-size: 2.6rem;">🥬</span>
+  <span class="floating-food" style="top: 35%; left: 3%; animation-delay: 3.2s; font-size: 1.6rem;">🍞</span>
+  <span class="floating-food" style="top: 55%; right: 5%; animation-delay: 1.8s; font-size: 2rem;">🥩</span>
+  <span class="floating-food" style="top: 25%; right: 25%; animation-delay: 4s; font-size: 1.4rem;">🫘</span>
+  <span class="floating-food" style="top: 60%; left: 20%; animation-delay: 2.5s; font-size: 1.6rem;">🍅</span>
+  <span class="floating-food" style="bottom: 12%; left: 30%; animation-delay: 3.5s; font-size: 1.8rem;">🥕</span>
+  <span class="floating-food" style="top: 12%; left: 35%; animation-delay: 0.3s; font-size: 1.4rem;">🥛</span>
+  <span class="floating-food" style="bottom: 18%; right: 30%; animation-delay: 2.2s; font-size: 2rem;">🍗</span>
+  <span class="floating-food" style="top: 45%; left: 12%; animation-delay: 1.4s; font-size: 1.6rem;">🫑</span>
+
+  <!-- FreshSave logo as ghostly fridge icon — the real food_bank (house + cutlery) -->
+  <div class="hook-fridge">
+    <span class="material-icons-round" style="font-size: 10rem; color: rgba(22,163,74,0.35);">food_bank</span>
+  </div>
+
+  <div class="hook-hint">→</div>
+</div>
+
+<!-- ==========================================================
+     APP SHELL — Slides 1–9
+========================================================== -->
+<div class="app-shell">
+
+  <!-- =====================================================
+       SIDEBAR — Permanent, with narrative-flow labels
+  ====================================================== -->
+  <div class="sidebar" id="sidebar" data-active-nav="hook">
+    <div class="sidebar-header">
+      <!-- FreshSave logo: MUI FoodBank icon (house + cutlery) — matches App.tsx -->
+      <span class="material-icons-round" style="font-size: 32px; color: var(--primary);">food_bank</span>
+      <span class="logo-text">FreshSave</span>
+    </div>
+    <div class="sidebar-divider"></div>
+
+    <!-- STORY SECTION -->
+    <div class="sidebar-section-label">The Story</div>
+    <div class="sidebar-nav">
+      <div class="nav-item" data-nav="hook">
+        <span class="nav-emoji">🎤</span> Introducing FreshSave
+      </div>
+      <div class="nav-item" data-nav="problem">
+        <span class="nav-emoji">🌍</span> The Problem
+      </div>
+      <div class="nav-item" data-nav="solution">
+        <span class="nav-emoji">⚡</span> How It Works
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- DEMO & TECH SECTION -->
+    <div class="sidebar-section-label">Show & Tell</div>
+    <div class="sidebar-nav">
+      <div class="nav-item" data-nav="demo">
+        <span class="nav-emoji">🚀</span> Demo
+      </div>
+      <div class="nav-item" data-nav="future">
+        <span class="nav-emoji">🔮</span> Future
+      </div>
+      <div class="nav-item" data-nav="impact">
+        <span class="nav-emoji">🎯</span> Impact
+      </div>
+      <div class="nav-item" data-nav="team">
+        <span class="nav-emoji">👥</span> Meet the Team
+      </div>
+    </div>
+
+    <!-- QR Code at bottom of sidebar -->
+    <div style="margin-top: auto; padding: 24px 16px; text-align: center;">
+      <img src="assets/QR_Code.jpg" alt="QR Code" style="width: 200px; height: 200px; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);">
+      <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 10px; font-weight: 600;">Scan to try FreshSave</div>
+    </div>
+  </div>
+
+  <!-- =====================================================
+       MAIN CONTENT AREA — All slides
+  ====================================================== -->
+  <div class="main-content">
+
+    <!-- ====== SLIDE 1: TITLE / HERO ====== -->
+    <div class="page-area active" id="slide-1" data-nav="hook">
+      <div class="demo-center">
+        <div style="margin-bottom: 12px;">
+          <!-- FreshSave logo: house + cutlery icon -->
+          <span class="material-icons-round" style="font-size: 72px; color: var(--primary);">food_bank</span>
+        </div>
+        <div class="page-title" style="font-size: 3rem; letter-spacing: -0.03em; color: var(--primary);">FreshSave</div>
+        <p style="font-size: 1.1rem; color: var(--text-secondary); max-width: 600px; margin: 8px auto 32px; line-height: 1.6;">
+          AI that saves food before it's wasted — a nine-model intelligent system for the circular food economy.
+        </p>
+        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px;">
+          <div class="mui-chip chip-fresh" style="padding: 8px 20px; font-size: 0.9rem; font-weight: 700;">9 AI Technologies</div>
+          <div class="mui-chip chip-use-soon" style="padding: 8px 20px; font-size: 0.9rem; font-weight: 700;">4 Pipeline Stages</div>
+          <div class="mui-chip chip-outlined" style="padding: 8px 20px; font-size: 0.9rem; font-weight: 700;">€0 Total Cost</div>
+        </div>
+        <p style="font-size: 0.8rem; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase;">AtlanTec AI Hackathon 2026 &nbsp;·&nbsp; Human Intelligence Driving Transformative Innovation</p>
+      </div>
+    </div>
+
+    <!-- ====== SLIDE 2: THE PROBLEM ====== -->
+    <div class="page-area" id="slide-2" data-nav="problem">
+      <div class="page-title" style="font-size: 2.2rem; margin-bottom: 16px;">Ireland's Food Waste Crisis</div>
+
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px;">
+        <div class="stat-paper" style="background: var(--tint-red); padding: 24px 16px;">
+          <div class="sp-value" style="color: var(--error); font-size: 2.5rem;">25%+</div>
+          <div class="sp-label" style="font-size: 0.82rem; margin-top: 6px;">Of global food — wasted</div>
+        </div>
+        <div class="stat-paper" style="background: var(--tint-red); padding: 24px 16px;">
+          <div class="sp-value" style="color: var(--error); font-size: 2.5rem;">8–10%</div>
+          <div class="sp-label" style="font-size: 0.82rem; margin-top: 6px;">Of global GHG emissions</div>
+        </div>
+        <div class="stat-paper" style="background: var(--tint-red); padding: 24px 16px;">
+          <div class="sp-value" style="color: var(--error); font-size: 2.5rem;">221k</div>
+          <div class="sp-label" style="font-size: 0.82rem; margin-top: 6px;">Tonnes — Irish households (2023)</div>
+        </div>
+        <div class="stat-paper" style="background: var(--tint-red); padding: 24px 16px;">
+          <div class="sp-value" style="color: var(--error); font-size: 2.5rem;">€700</div>
+          <div class="sp-label" style="font-size: 0.82rem; margin-top: 6px;">Per household / year</div>
+        </div>
+        <div class="stat-paper" style="background: var(--tint-red); padding: 24px 16px;">
+          <div class="sp-value" style="color: var(--error); font-size: 2.5rem;">€1.29B</div>
+          <div class="sp-label" style="font-size: 0.82rem; margin-top: 6px;">National annual cost</div>
+        </div>
+      </div>
+
+      <div class="section-title" style="font-size: 1.15rem; margin-bottom: 16px;">Why It Happens — Four Human Problems</div>
+      <div class="grid-2" style="gap: 16px;">
+        <div class="mui-card card-yellow"><div class="mui-card-content" style="padding: 24px;"><span style="font-size: 32px;">🧊</span><br><strong style="font-size: 1.05rem;">We Forget</strong><br><span class="text-secondary" style="font-size: 0.92rem; line-height: 1.6;">We don't know what's in the back of our fridge until it's too late.</span></div></div>
+        <div class="mui-card card-yellow"><div class="mui-card-content" style="padding: 24px;"><span style="font-size: 32px;">📅</span><br><strong style="font-size: 1.05rem;">We Don't Track</strong><br><span class="text-secondary" style="font-size: 0.92rem; line-height: 1.6;">No one mentally tracks when they bought each item or how long it lasts.</span></div></div>
+        <div class="mui-card card-yellow"><div class="mui-card-content" style="padding: 24px;"><span style="font-size: 32px;">🍳</span><br><strong style="font-size: 1.05rem;">We Don't Know What to Cook</strong><br><span class="text-secondary" style="font-size: 0.92rem; line-height: 1.6;">When ingredients are near expiry, we can't think of what meal to make.</span></div></div>
+        <div class="mui-card card-yellow"><div class="mui-card-content" style="padding: 24px;"><span style="font-size: 32px;">🗑️</span><br><strong style="font-size: 1.05rem;">We Just Bin It</strong><br><span class="text-secondary" style="font-size: 0.92rem; line-height: 1.6;">When food goes bad, we have no idea there are better options than the bin.</span></div></div>
+      </div>
+
+      <p style="margin-top: 20px; font-size: 0.72rem; color: #94a3b8;">Source: <a href="https://www.epa.ie/our-services/monitoring--assessment/waste/national-waste-statistics/food/" target="_blank" style="color: #94a3b8; text-decoration: underline;">EPA Ireland — National Food Waste Statistics</a></p>
+    </div>
+
+    <!-- ====== SLIDE 3: HOW IT WORKS — Architecture Diagram ====== -->
+    <div class="page-area" id="slide-3" data-nav="solution" style="display: none; flex-direction: column;">
+      <div class="page-title" style="font-size: 2.2rem;">How FreshSave Works</div>
+      <p class="page-subtitle" style="font-size: 1rem; margin-bottom: 28px;">Four input modes feed a smart pantry. The pantry powers two AI engines — one to cook your food, one to rescue it.</p>
+
+      <!-- Architecture Diagram — CSS Flexbox boxes with arrows -->
+      <div style="display: flex; align-items: stretch; gap: 0; margin-top: 8px; flex: 1; min-height: 0;">
+
+        <!-- COLUMN 1: Input Modes -->
+        <div style="display: flex; flex-direction: column; gap: 10px; flex: 1; justify-content: center;">
+          <div style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; margin-bottom: 4px; text-align: center;">Input Modes</div>
+          <div style="background: var(--tint-green); border-radius: 14px; padding: 14px 16px; text-align: center; border: 1px solid #a7f3d0;">
+            <span class="material-icons-round" style="font-size: 26px; color: #0f172a;">camera_alt</span>
+            <div style="font-weight: 700; font-size: 0.88rem;">Fridge Photo</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary);">Gemini Vision</div>
+          </div>
+          <div style="background: var(--tint-teal); border-radius: 14px; padding: 14px 16px; text-align: center; border: 1px solid #99f6e4;">
+            <span class="material-icons-round" style="font-size: 26px; color: #0f172a;">receipt</span>
+            <div style="font-weight: 700; font-size: 0.88rem;">Receipt Scan</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary);">Gemini + Tesseract OCR</div>
+          </div>
+          <div style="background: var(--tint-pink); border-radius: 14px; padding: 14px 16px; text-align: center; border: 1px solid #fecdd3;">
+            <span class="material-icons-round" style="font-size: 26px; color: #0f172a;">mic</span>
+            <div style="font-weight: 700; font-size: 0.88rem;">Voice Input</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary);">Web Speech API + Gemini</div>
+          </div>
+          <div style="background: var(--tint-yellow); border-radius: 14px; padding: 14px 16px; text-align: center; border: 1px solid #fde68a;">
+            <span class="material-icons-round" style="font-size: 26px; color: #0f172a;">edit</span>
+            <div style="font-weight: 700; font-size: 0.88rem;">Manual Entry</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary);">Form-based</div>
+          </div>
+        </div>
+
+        <!-- ARROW 1: Inputs → Pantry -->
+        <div style="display: flex; align-items: center; justify-content: center; width: 48px; flex-shrink: 0;">
+          <svg width="40" height="24" viewBox="0 0 40 24" fill="none" style="overflow: visible;">
+            <line x1="0" y1="12" x2="32" y2="12" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="4 3"/>
+            <polygon points="30,6 40,12 30,18" fill="#16a34a"/>
+          </svg>
+        </div>
+
+        <!-- COLUMN 2: Smart Pantry (central hub) -->
+        <div style="display: flex; flex-direction: column; justify-content: center; flex: 1;">
+          <div style="background: linear-gradient(135deg, #dcfce7, #d1fae5); border: 2px solid var(--primary); border-radius: var(--card-radius); padding: 28px 20px; text-align: center; box-shadow: 0 8px 32px rgba(22,163,74,0.12); position: relative;">
+            <span class="material-icons-round" style="font-size: 48px; color: var(--primary);">food_bank</span>
+            <div style="font-weight: 800; font-size: 1.25rem; color: var(--primary); margin: 8px 0 6px;">Smart Pantry</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+              Every item scored <strong>0–100</strong><br>
+              Freshness decays daily<br>
+              using real food science
+            </div>
+            <!-- 4-signal ensemble badge -->
+            <div style="margin-top: 12px; background: white; border-radius: 10px; padding: 8px 12px; font-size: 0.72rem; color: var(--text-secondary); border: 1px solid var(--border);">
+              Deep Analysis: <strong>Gemini</strong> · <strong>OpenCV</strong> · <strong>ViT</strong> · <strong>CLIP</strong><br>
+              fused by Bayesian model + <strong>Llama 3.3</strong> explanation
+            </div>
+          </div>
+        </div>
+
+        <!-- ARROW 2: Pantry → Engines -->
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 48px; flex-shrink: 0; gap: 60px;">
+          <!-- Top arrow to Meal Planner -->
+          <svg width="40" height="24" viewBox="0 0 40 24" fill="none" style="overflow: visible;">
+            <line x1="0" y1="12" x2="32" y2="12" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="4 3"/>
+            <polygon points="30,6 40,12 30,18" fill="#f59e0b"/>
+          </svg>
+          <!-- Bottom arrow to Exit Engine -->
+          <svg width="40" height="24" viewBox="0 0 40 24" fill="none" style="overflow: visible;">
+            <line x1="0" y1="12" x2="32" y2="12" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="4 3"/>
+            <polygon points="30,6 40,12 30,18" fill="#ef4444"/>
+          </svg>
+        </div>
+
+        <!-- COLUMN 3: Output Engines -->
+        <div style="display: flex; flex-direction: column; gap: 16px; justify-content: center; flex: 1;">
+          <!-- Meal Planner -->
+          <div style="background: linear-gradient(135deg, var(--tint-yellow), #fff8e1); border: 2px solid #f59e0b; border-radius: var(--card-radius); padding: 24px 20px; text-align: center; box-shadow: 0 4px 16px rgba(245,158,11,0.1);">
+            <div style="font-size: 38px; margin-bottom: 6px;">🍽️</div>
+            <div style="font-weight: 800; font-size: 1.1rem; color: #92400e;">AI Meal Planner</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-top: 6px;">
+              Generates recipes that<br>
+              <strong>prioritise expiring items first</strong><br>
+              Dietary-profile aware
+            </div>
+            <div style="margin-top: 10px; font-size: 0.72rem; background: white; border-radius: 8px; padding: 6px 10px; border: 1px solid #fde68a; color: var(--text-secondary);">
+              Powered by <strong>Gemini</strong>
+            </div>
+          </div>
+
+          <!-- Exit Strategy Engine -->
+          <div style="background: linear-gradient(135deg, var(--tint-red), #fee2e2); border: 2px solid var(--error); border-radius: var(--card-radius); padding: 24px 20px; text-align: center; box-shadow: 0 4px 16px rgba(239,68,68,0.1);">
+            <div style="font-size: 38px; margin-bottom: 6px;">♻️</div>
+            <div style="font-weight: 800; font-size: 1.1rem; color: #991b1b;">Exit Strategy Engine</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-top: 6px;">
+              Triple-Check safety gates<br>
+              + EFSA/FDA RAG system
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
+              <span style="background: var(--tint-green-deep); color: #2e7d32; font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 8px;">🔄 Upcycle</span>
+              <span style="background: var(--tint-purple); color: #7c3aed; font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 8px;">💝 Donate</span>
+              <span style="background: var(--tint-red); color: var(--error); font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 8px;">🗑️ Dispose</span>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.72rem; background: white; border-radius: 8px; padding: 6px 10px; border: 1px solid #fecaca; color: var(--text-secondary);">
+              Powered by <strong>Gemini</strong> + <strong>Llama 3.3</strong>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /architecture diagram -->
+
+      <!-- Bottom note -->
+      <div style="margin-top: 16px; text-align: center;">
+        <span style="font-size: 0.72rem; color: #94a3b8; background: #f8fafc; padding: 6px 16px; border-radius: 10px; border: 1px solid var(--border);">
+          9 AI technologies &nbsp;·&nbsp; Total cost: <strong>€0</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- ====== SLIDE 4: DEMO ====== -->
+    <div class="page-area" id="slide-4" data-nav="demo">
+      <div class="demo-center">
+        <div class="demo-pulse-chip">
+          <span class="material-icons-round" style="font-size: 18px;">bolt</span>
+          DEMO
+        </div>
+        <div class="page-title" style="font-size: 2.5rem;">See It In Action</div>
+        <div style="margin-top: 24px; max-width: 800px; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.25);">
+          <video id="demo-video" controls playsinline preload="metadata"
+            style="width: 100%; height: 100%; object-fit: contain;"
+            poster="">
+            <!-- Drop your demo recording (demo.mp4) into the same folder as this HTML file -->
+            <source src="assets/Demo.mp4" type="video/mp4">
+            <p style="color: #aaa; text-align: center; padding: 40px;">Video not found. Place <code>demo.mp4</code> next to this HTML file.</p>
+          </video>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 12px;">Click play or press <kbd>Space</kbd> to start the demo video</p>
+      </div>
+    </div>
+
+    <!-- ====== SLIDE 5: FUTURE ENHANCEMENTS — Ecosystem ====== -->
+    <div class="page-area" id="slide-5" data-nav="future">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center;">
+        <div class="page-title" style="font-size: 2.2rem; margin-bottom: 6px;">Building the Ecosystem</div>
+        <p class="text-secondary" style="max-width: 500px; margin: 0 auto 32px; font-size: 0.95rem; line-height: 1.6;">FreshSave today is just the beginning. Here's where it's heading.</p>
+
+        <!-- Orbital layout: App in center, enhancements orbiting -->
+        <div style="position: relative; width: 580px; height: 420px;">
+
+          <!-- Central App Hub -->
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(135deg, #dcfce7, #d1fae5); border: 3px solid var(--primary); border-radius: 50%; width: 150px; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(22,163,74,0.18); z-index: 2;">
+            <span class="material-icons-round" style="font-size: 42px; color: var(--primary);">food_bank</span>
+            <div style="font-weight: 800; font-size: 0.95rem; color: var(--primary); margin-top: 2px;">FreshSave</div>
+          </div>
+
+          <!-- Dashed orbit ring -->
+          <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;" viewBox="0 0 580 420">
+            <ellipse cx="290" cy="210" rx="260" ry="185" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="8 6"/>
+          </svg>
+
+          <!-- Enhancement 1: Supermarket App — top -->
+          <div style="position: absolute; top: -5px; left: 50%; transform: translateX(-50%); background: var(--tint-blue); border: 2px solid #90caf9; border-radius: 18px; padding: 14px 20px; text-align: center; width: 190px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); z-index: 1;">
+            <div style="font-size: 28px; margin-bottom: 4px;">🛒</div>
+            <div style="font-weight: 700; font-size: 0.88rem; color: #1565C0;">Supermarket Integration</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5; margin-top: 2px;">Auto-import purchases from your grocery app</div>
+          </div>
+
+          <!-- Enhancement 2: Smartwatch Biometrics — right -->
+          <div style="position: absolute; top: 50%; right: -10px; transform: translateY(-50%); background: var(--tint-purple); border: 2px solid #ce93d8; border-radius: 18px; padding: 14px 20px; text-align: center; width: 185px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); z-index: 1;">
+            <div style="font-size: 28px; margin-bottom: 4px;">⌚</div>
+            <div style="font-weight: 700; font-size: 0.88rem; color: #7c3aed;">Smartwatch Biometrics</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5; margin-top: 2px;">Health data to personalise nutrition & meal plans</div>
+          </div>
+
+          <!-- Enhancement 3: Local Charities — bottom -->
+          <div style="position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); background: var(--tint-green-deep); border: 2px solid #a5d6a7; border-radius: 18px; padding: 14px 20px; text-align: center; width: 190px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); z-index: 1;">
+            <div style="font-size: 28px; margin-bottom: 4px;">💝</div>
+            <div style="font-weight: 700; font-size: 0.88rem; color: #2e7d32;">Charity Network</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5; margin-top: 2px;">Live integration with local food banks & shelters</div>
+          </div>
+
+          <!-- Enhancement 4: FreshSave Friends — left -->
+          <div style="position: absolute; top: 50%; left: -10px; transform: translateY(-50%); background: var(--tint-yellow); border: 2px solid #fde68a; border-radius: 18px; padding: 14px 20px; text-align: center; width: 185px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); z-index: 1;">
+            <div style="font-size: 28px; margin-bottom: 4px;">👋</div>
+            <div style="font-weight: 700; font-size: 0.88rem; color: #92400e;">FreshSave Friends</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5; margin-top: 2px;">Share surplus food with friends & neighbours</div>
+          </div>
+
+        </div><!-- /orbital layout -->
+      </div>
+    </div>
+
+    <!-- ====== SLIDE 6: IMPACT — SDGs ====== -->
+    <div class="page-area" id="slide-6" data-nav="impact">
+      <div class="closing-center">
+        <div class="page-title" style="font-size: 2.2rem; color: var(--primary); margin-bottom: 24px;">FreshSave Supports 3 UN Sustainable Development Goals</div>
+
+        <div style="display: flex; gap: 32px; justify-content: center; align-items: flex-start; flex-wrap: wrap;">
+          <!-- SDG 2 -->
+          <div style="text-align: center; max-width: 200px;">
+            <img src="assets/E-WEB-Goal-02.png" alt="SDG 2 — Zero Hunger" style="width: 160px; height: 160px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5;">Redirect edible food to those who need it via verified local charities.</div>
+          </div>
+          <!-- SDG 12 -->
+          <div style="text-align: center; max-width: 200px;">
+            <img src="assets/E-WEB-Goal-12.png" alt="SDG 12 — Responsible Consumption & Production" style="width: 160px; height: 160px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5;">AI-driven freshness scoring and meal planning prevent waste at the source.</div>
+          </div>
+          <!-- SDG 13 -->
+          <div style="text-align: center; max-width: 200px;">
+            <img src="assets/E-WEB-Goal-13.png" alt="SDG 13 — Climate Action" style="width: 160px; height: 160px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5;">Every item diverted from landfill prevents 2.5 kg of CO₂-equivalent methane.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== SLIDE 7: MEET THE TEAM ====== -->
+    <div class="page-area" id="slide-7" data-nav="team">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; gap: 24px;">
+        <div class="page-title" style="font-size: 2.6rem; margin-bottom: 0;">Thank You 💚</div>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap;">
+          <!-- Team photo -->
+          <img src="assets/IMG_6982.png" alt="The FreshSave Team" style="max-width: 520px; width: 100%; border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.12);">
+          <!-- QR Code -->
+          <div style="text-align: center;">
+            <img src="assets/QR_Code.jpg" alt="QR Code" style="width: 220px; height: 220px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);">
+            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 10px; font-weight: 600;">Scan to try FreshSave</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<!-- ====== NAVIGATION ====== -->
+<div class="slide-progress" id="progress"></div>
+<div class="slide-info" id="counter"></div>
+<div class="slide-nav-hint">← → to navigate</div>
+
+<script>
+  // Slide 0 = hook overlay, Slides 1–9 = app shell pages
+  const hookOverlay = document.getElementById('hookOverlay');
+  const slides = document.querySelectorAll('.page-area');
+  const sidebar = document.getElementById('sidebar');
+  const totalSlides = slides.length + 1; // +1 for hook slide
+  let current = 0; // 0 = hook, 1..9 = app slides
+
+  function updateSlide() {
+    // Hook overlay
+    if (current === 0) {
+      hookOverlay.classList.remove('hidden');
+    } else {
+      hookOverlay.classList.add('hidden');
+    }
+
+    // App slides (1-indexed for the slides array)
+    slides.forEach((s, i) => s.classList.toggle('active', i === current - 1));
+
+    // Progress bar
+    document.getElementById('progress').style.width = ((current + 1) / totalSlides * 100) + '%';
+    document.getElementById('counter').textContent = (current + 1) + ' / ' + totalSlides;
+
+    // Update sidebar active nav
+    if (current === 0) {
+      sidebar.setAttribute('data-active-nav', 'hook');
+    } else {
+      const activeNav = slides[current - 1].getAttribute('data-nav') || 'hook';
+      sidebar.setAttribute('data-active-nav', activeNav);
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      if (current < totalSlides - 1) { current++; updateSlide(); }
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      if (current > 0) { current--; updateSlide(); }
+    } else if (e.key === 'Home') {
+      current = 0; updateSlide();
+    } else if (e.key === 'End') {
+      current = totalSlides - 1; updateSlide();
+    }
+  });
+
+  // Touch swipe support
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].screenX;
+    if (diff > 50 && current < totalSlides - 1) { current++; updateSlide(); }
+    else if (diff < -50 && current > 0) { current--; updateSlide(); }
+  });
+
+  // Sidebar nav click → jump to slide
+  document.querySelectorAll('.nav-item[data-nav]').forEach(item => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+      const targetNav = item.getAttribute('data-nav');
+      if (targetNav === 'hook') { current = 0; updateSlide(); return; }
+      for (let i = 0; i < slides.length; i++) {
+        if (slides[i].getAttribute('data-nav') === targetNav) {
+          current = i + 1;
+          updateSlide();
+          return;
+        }
+      }
+    });
+  });
+
+  updateSlide();
+</script>
+
+</body>
+</html>
